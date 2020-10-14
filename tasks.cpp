@@ -52,6 +52,7 @@ void initialisePorts() {
 void cmd(void * pvParameters) {
 	
 	while (true) {
+		
 		//system("cls");
 		string comm;
 		printf("\nInput your function:\n\t:");
@@ -65,21 +66,26 @@ void cmd(void * pvParameters) {
 			printf("Coords:\n\t:");
 			scanf("%*c");
 			scanf("(%d,%d)", &coords[0], &coords[1]);
-			//xQueueSend(mov, &coords, 0);
-		}
+			xSemaphoreTake(xzMov, portMAX_DELAY);
+			xQueueSend(mov, &coords, 0);
 
+		}
+		if (!comm.compare("exit")) {
+			exit(0);
+		}
 	}
 }
 
 void gridMovement(void* pvParameters) {
 	while (true) {
-		//xQueueReceive(mov, &coords, portMAX_DELAY);
-		//printf("\n%d,%d\n", coords[0], coords[1]);
+		int coords[2];
+		xQueueReceive(mov, &coords, portMAX_DELAY);
+		printf("\n%d,%d\n", coords[0], coords[1]);
 	}
 	//Wait for msg from addStock or takeStock()
-
+	Sleep(4000);
 	//msg xMovement and zMovement()
-	
+	xSemaphoreGive(xzMov);
 }
 
 void xMovement() {
@@ -108,6 +114,9 @@ void takeStock() {
 }
 
 void myDaemonTaskStartupHook(void) {
+	mov = xQueueCreate(1, 2 * sizeof(int));
+	xzMov = xSemaphoreCreateCounting(1, 1);
+	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
 	xTaskCreate(cmd, "cmd", 100, NULL, 0, NULL);
