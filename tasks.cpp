@@ -26,6 +26,44 @@ void initialisePorts() {
 	resetPos();
 }
 
+void cmd() {
+
+}
+
+void gridMovement() {
+	//Wait for msg from cmd
+	
+	//process data
+	
+	//Msg addStock or takeStock
+	
+}
+
+void xMovement() {
+
+	//Wait for msg from gridMovement
+	gotoX(0);
+}
+
+void zMovement() {
+	//Wait for msg from gridMovement
+	gotoZ(0);
+}
+
+void addStock() {
+
+	//Msg gridMovement
+	putPartInCell();
+
+}
+
+void takeStock() {
+
+	//Msg gridMovement
+	takePartFromCell();
+
+}
+
 void myDaemonTaskStartupHook(void) {
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
