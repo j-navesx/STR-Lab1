@@ -1,18 +1,41 @@
 #include<conio.h>
 #include<iostream>
 #include<stdlib.h>
+#include<string>
+#include<cstring>
 #include <windows.h> //for Sleep function
 extern "C" {
 #include <interface.h>
 #include <FreeRTOS.h>
 #include <task.h>
 #include <timers.h>
+#include <queue.h>
 #include <semphr.h>
 #include <interrupts.h>
 }
 
+using namespace std;
+
 #include <functions.h>
 #include <movement.h>
+
+typedef struct {
+	int reference;
+	int entryDate;
+	int expiration;
+}StoreRequest;
+
+//MAILBOXES
+
+xQueueHandle request;
+xQueueHandle mov;
+xQueueHandle xMov;
+xQueueHandle zMov;
+
+//SEMAPHORES
+
+xSemaphoreHandle xzMov;
+
 
 void initialisePorts() {
 	//positions on the x axis (sensors on the bottom activate on passage)
@@ -26,16 +49,36 @@ void initialisePorts() {
 	resetPos();
 }
 
-void cmd() {
+void cmd(void * pvParameters) {
+	
+	while (true) {
+		//system("cls");
+		string comm;
+		printf("\nInput your function:\n\t:");
+		cin >> comm;
+		if (!comm.compare("help")){
+			printf("\n\tCommands available:\n");
+			printf("-");
+		}
+		if (!comm.compare("goto")) {
+			int coords[2];
+			printf("Coords:\n\t:");
+			scanf("%*c");
+			scanf("(%d,%d)", &coords[0], &coords[1]);
+			//xQueueSend(mov, &coords, 0);
+		}
 
+	}
 }
 
-void gridMovement() {
-	//Wait for msg from cmd
-	
-	//process data
-	
-	//Msg addStock or takeStock
+void gridMovement(void* pvParameters) {
+	while (true) {
+		//xQueueReceive(mov, &coords, portMAX_DELAY);
+		//printf("\n%d,%d\n", coords[0], coords[1]);
+	}
+	//Wait for msg from addStock or takeStock()
+
+	//msg xMovement and zMovement()
 	
 }
 
@@ -67,5 +110,7 @@ void takeStock() {
 void myDaemonTaskStartupHook(void) {
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
+	xTaskCreate(cmd, "cmd", 100, NULL, 0, NULL);
+	xTaskCreate(gridMovement, "gridMovement", 100, NULL, 0, NULL);
 	initialisePorts();
 }

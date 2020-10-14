@@ -16,6 +16,5 @@ extern "C" {
 #define mainREGION_3_SIZE 7607
 
 void vAssertCalled(unsigned long ulLine, const char* const pcFileName);
-static void initialiseHeap(void);
 int getBitValue(uInt8 value, uInt8 bit_n);
 void setBitValue(uInt8* variable, int n_bit, int new_value_bit);

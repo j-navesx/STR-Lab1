@@ -40,28 +40,6 @@ void vAssertCalled(unsigned long ulLine, const char* const pcFileName) {
 	taskEXIT_CRITICAL();
 }
 
-static void initialiseHeap(void) {
-	static uint8_t ucHeap[configTOTAL_HEAP_SIZE];
-	/* Just to prevent 'condition is always true' warnings in configASSERT(). */
-	volatile uint32_t ulAdditionalOffset = 19;
-	const HeapRegion_t xHeapRegions[] =
-	{
-		/* Start address with dummy offsetsSize */
-		{ ucHeap + 1,mainREGION_1_SIZE },
-		{ ucHeap + 15 + mainREGION_1_SIZE,mainREGION_2_SIZE },
-		{ ucHeap + 19 + mainREGION_1_SIZE +
-		mainREGION_2_SIZE,mainREGION_3_SIZE },
-		{ NULL, 0 }
-	};
-	configASSERT((ulAdditionalOffset +
-		mainREGION_1_SIZE +
-		mainREGION_2_SIZE +
-		mainREGION_3_SIZE) < configTOTAL_HEAP_SIZE);
-	/* Prevent compiler warnings when configASSERT() is not defined. */
-	(void)ulAdditionalOffset;
-	vPortDefineHeapRegions(xHeapRegions);
-}
-
 
 int getBitValue(uInt8 value, uInt8 bit_n)
 // given a byte value, returns the value of its bit n
