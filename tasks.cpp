@@ -25,6 +25,11 @@ typedef struct {
 	int expiration;
 }StoreRequest;
 
+typedef struct {
+	int xcord;
+	int zcord;
+}Coords;
+
 //MAILBOXES
 
 xQueueHandle request;
@@ -118,7 +123,7 @@ void takeStock() {
 }
 
 void myDaemonTaskStartupHook(void) {
-	mov = xQueueCreate(1, 2 * sizeof(int));
+	mov = xQueueCreate(1, sizeof(Coords));
 	xzMov = xSemaphoreCreateCounting(1, 1);
 	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
