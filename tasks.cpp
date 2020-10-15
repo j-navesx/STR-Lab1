@@ -99,6 +99,10 @@ void zMovement() {
 	gotoZ(0);
 }
 
+void gotoDock() {
+
+}
+
 void addStock() {
 
 	//Msg gridMovement
