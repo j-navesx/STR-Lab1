@@ -31,15 +31,17 @@ typedef struct {
 }Coords;
 
 //MAILBOXES
-
-xQueueHandle request;
-xQueueHandle mov;
-xQueueHandle xMov;
-xQueueHandle zMov;
+xQueueHandle mbx_keyb;
+xQueueHandle mbx_request;
+xQueueHandle mbx_mov;
+xQueueHandle mbx_xMov;
+xQueueHandle mbx_zMov;
 
 //SEMAPHORES
 
-xSemaphoreHandle xzMov;
+xSemaphoreHandle sem_xzMov;
+xSemaphoreHandle sem_xMov;
+xSemaphoreHandle sem_zMov;
 
 
 void initialisePorts() {
@@ -52,6 +54,10 @@ void initialisePorts() {
 
 	writeDigitalU8(2, 0);
 	resetPos();
+}
+
+void kybControl(void * pvParameters) {
+
 }
 
 void cmd(void * pvParameters) {
@@ -71,8 +77,8 @@ void cmd(void * pvParameters) {
 			printf("Coords:\n\t:");
 			scanf("%*c");
 			scanf("(%d,%d)", &coords[0], &coords[1]);
-			xSemaphoreTake(xzMov, portMAX_DELAY);
-			xQueueSend(mov, &coords, 0);
+			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+			xQueueSend(mbx_mov, &coords, 0);
 
 		}
 		if (!comm.compare("exit")) {
@@ -84,13 +90,12 @@ void cmd(void * pvParameters) {
 void gridMovement(void* pvParameters) {
 	while (true) {
 		int coords[2];
-		xQueueReceive(mov, &coords, portMAX_DELAY);
+		xQueueReceive(mbx_mov, &coords, portMAX_DELAY);
 		printf("\n%d,%d\n", coords[0], coords[1]);
 	}
 	//Wait for msg from addStock or takeStock()
-	Sleep(4000);
 	//msg xMovement and zMovement()
-	xSemaphoreGive(xzMov);
+	xSemaphoreGive(sem_xzMov);
 }
 
 void xMovement() {
@@ -123,8 +128,8 @@ void takeStock() {
 }
 
 void myDaemonTaskStartupHook(void) {
-	mov = xQueueCreate(1, sizeof(Coords));
-	xzMov = xSemaphoreCreateCounting(1, 1);
+	mbx_mov = xQueueCreate(1, sizeof(Coords));
+	sem_xzMov = xSemaphoreCreateCounting(1, 1);
 	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
