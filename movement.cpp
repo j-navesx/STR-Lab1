@@ -19,25 +19,34 @@ extern "C" {
 
 // X movement:
 
-void moveXRight() {
-	uInt8 pos = readDigitalU8(2);
-	setBitValue(&pos, 6, 0);
-	setBitValue(&pos, 7, 1);
-	writeDigitalU8(2, pos);
+void moveXRight()
+{
+	taskENTER_CRITICAL();
+	uInt8 p = readDigitalU8(2); //read port 2
+	setBitValue(&p, 6, 0); // set bit 6 to low level
+	setBitValue(&p, 7, 1); //set bit 7 to high level
+	writeDigitalU8(2, p); //update port 2
+	taskEXIT_CRITICAL();
 }
 
-void moveXLeft() {
-	uInt8 pos = readDigitalU8(2);
-	setBitValue(&pos, 7, 0);
-	setBitValue(&pos, 6, 1);
-	writeDigitalU8(2, pos);
+void moveXLeft()
+{
+	taskENTER_CRITICAL();
+	uInt8 p = readDigitalU8(2); // read port 2
+	setBitValue(&p, 6, 1); // set bit 6 to high level
+	setBitValue(&p, 7, 0); //set bit 7 to low level
+	writeDigitalU8(2, p); // update port 2
+	taskEXIT_CRITICAL();
 }
 
-void stopX() {
-	uInt8 pos = readDigitalU8(2);
-	setBitValue(&pos, 7, 0);
-	setBitValue(&pos, 6, 0);
-	writeDigitalU8(2, pos);
+void stopX()
+{
+	taskENTER_CRITICAL();
+	uInt8 p = readDigitalU8(2); //read port 2
+	setBitValue(&p, 6, 0); // set bit 6 to low level
+	setBitValue(&p, 7, 0); //set bit 7 to low level
+	writeDigitalU8(2, p); //update port 2
+	taskEXIT_CRITICAL();
 }
 
 int getXPos() {
@@ -56,7 +65,7 @@ int getXPos() {
 	}
 }
 
-void gotoX(int xPos) {
+/*void gotoX(int xPos) {
 	int currPos = getXPos();
 	printf("CURRENT POS %d\n", currPos);
 	if (currPos > xPos) {
@@ -72,7 +81,7 @@ void gotoX(int xPos) {
 		}
 	}
 	printf("STOPPED AT %d\n\n", xPos);
-}
+}*/
 
 // Y movement:
 
@@ -133,25 +142,34 @@ void gotoY(int yPos) {
 
 // Z movement:
 
-void moveZUp() {
+void moveZUp()
+{
+	taskENTER_CRITICAL();
 	uInt8 p = readDigitalU8(2); //read port 2
 	setBitValue(&p, 2, 0); // set bit 2 to low level
 	setBitValue(&p, 3, 1); //set bit 3 to high level
 	writeDigitalU8(2, p); //update port 2
+	taskEXIT_CRITICAL();
 }
 
-void moveZDown() {
+void moveZDown()
+{
+	taskENTER_CRITICAL();
 	uInt8 p = readDigitalU8(2); // read port 2
 	setBitValue(&p, 2, 1); // set bit 2 to high level
 	setBitValue(&p, 3, 0); //set bit 3 to low level
 	writeDigitalU8(2, p); // update port 2
+	taskEXIT_CRITICAL();
 }
 
-void stopZ() {
+void stopZ()
+{
+	taskENTER_CRITICAL();
 	uInt8 p = readDigitalU8(2); //read port 2
 	setBitValue(&p, 2, 0); // set bit 2 to low level
 	setBitValue(&p, 3, 0); //set bit 3 to low level
 	writeDigitalU8(2, p); //update port 2
+	taskEXIT_CRITICAL();
 }
 
 int getZPos() {
@@ -171,7 +189,7 @@ int getZPos() {
 	}
 }
 
-void gotoZ(int zPos) {
+/*void gotoZ(int zPos) {
 	int currPos = getZPos();
 	printf("CURRENT POS %d\n", currPos);
 	if (currPos > zPos) {
@@ -187,7 +205,7 @@ void gotoZ(int zPos) {
 		}
 	}
 	printf("STOPPED AT %d\n\n", zPos);
-}
+}*/
 
 void gotoZUp() {
 	moveZUp();

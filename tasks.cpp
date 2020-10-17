@@ -77,8 +77,8 @@ void cmd(void * pvParameters) {
 			printf("Coords:\n\t:");
 			scanf("%*c");
 			scanf("(%d,%d)", &coords[0], &coords[1]);
-			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 			xQueueSend(mbx_mov, &coords, 0);
+			xSemaphoreGive(sem_xzMov, portMAX_DELAY);
 
 		}
 		if (!comm.compare("exit")) {
@@ -87,7 +87,7 @@ void cmd(void * pvParameters) {
 	}
 }
 
-void gridMovement(void* pvParameters) {
+/*void gridMovement(void* pvParameters) {
 	while (true) {
 		int coords[2];
 		xQueueReceive(mbx_mov, &coords, portMAX_DELAY);
@@ -96,17 +96,67 @@ void gridMovement(void* pvParameters) {
 	//Wait for msg from addStock or takeStock()
 	//msg xMovement and zMovement()
 	xSemaphoreGive(sem_xzMov);
+}*/
+
+void gotoXZ(void* pvParameters) {
+	int x, z;
+	int coords[2];
+	while (true) {
+		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+		xQueueReceive(mbx_mov, &coords, portMAX_DELAY);
+		printf("\n%d,%d\n", coords[0], coords[1]);
+
+		x = coords[0];
+		z = coords[1];
+
+		xQueueSend(mbx_xMov, &x, portMAX_DELAY);
+		xQueueSend(mbx_zMov, &z, portMAX_DELAY);
+
+		//wait for goto_x completion, synchronization
+		xSemaphoreTake(sem_xMov, portMAX_DELAY);
+		//wait for goto_z completion, synchronization
+		xSemaphoreTake(sem_zMov, portMAX_DELAY);
+	}
 }
 
-void xMovement() {
+void gotoX(void* pvParameters) {
+	int x;
+	int crtpos;
+	while (true) {
+		xQueueReceive(mbx_xMov, &x, portMAX_DELAY);
+		crtpos = getXPos();
 
-	//Wait for msg from gridMovement
-	gotoX(0);
+		if (crtpos < x)
+			moveXRight();
+		else
+			if (crtpos > x)
+				moveXLeft();
+		while (getXPos() != x) {
+			taskYIELD();
+		}
+		stopX();
+		xSemaphoreGive(sem_xMov, portMAX_DELAY);
+	}
 }
 
-void zMovement() {
-	//Wait for msg from gridMovement
-	gotoZ(0);
+void gotoZ(void* pvParameters) {
+	int z;
+	int crtpos;
+	while (true) {
+		xQueueReceive(mbx_zMov, &z, portMAX_DELAY);
+		crtpos = getZPos();
+
+		if (crtpos < z)
+			moveZUp();
+		else
+			if (crtpos > z)
+				moveZDown();
+		while (getZPos() != z) {
+			taskYIELD();
+		}
+		stopZ();
+		xSemaphoreGive(sem_zMov, portMAX_DELAY);
+	}
 }
 
 void gotoDock() {
@@ -129,11 +179,17 @@ void takeStock() {
 
 void myDaemonTaskStartupHook(void) {
 	mbx_mov = xQueueCreate(1, sizeof(Coords));
-	sem_xzMov = xSemaphoreCreateCounting(1, 1);
+	mbx_xMov = xQueueCreate(1, sizeof(int));
+	mbx_zMov = xQueueCreate(1, sizeof(int));
+	sem_xzMov = xSemaphoreCreateCounting(1, 0);
+	sem_xMov = xSemaphoreCreateCounting(1, 1);
+	sem_zMov = xSemaphoreCreateCounting(1, 1);
 	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
 	xTaskCreate(cmd, "cmd", 100, NULL, 0, NULL);
-	xTaskCreate(gridMovement, "gridMovement", 100, NULL, 0, NULL);
+	xTaskCreate(gotoXZ, "gotoXZ", 100, NULL, 0, NULL);
+	xTaskCreate(gotoX, "gotoX", 100, NULL, 0, NULL);
+	xTaskCreate(gotoZ, "gotoZ", 100, NULL, 0, NULL);
 	initialisePorts();
 }

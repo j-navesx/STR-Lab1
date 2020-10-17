@@ -116,12 +116,14 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>.;C:\str\include;C:\str\freeRTOS\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -150,13 +152,13 @@
     <ClCompile Include="tasks.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Library Include="..\freeRTOS\freeRTOS.lib" />
-    <Library Include="..\lib\NIDAQmx.lib" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="functions.h" />
     <ClInclude Include="movement.h" />
     <ClInclude Include="tasks.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="..\freeRTOS\freeRTOS.lib" />
+    <Library Include="..\lib\NIDAQmx.lib" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

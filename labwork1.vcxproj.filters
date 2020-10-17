@@ -18,15 +18,6 @@
     <ClCompile Include="labwork1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\mongoose.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\source\sim_server.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\source\interface.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="movement.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -36,14 +27,15 @@
     <ClCompile Include="functions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Library Include="..\freeRTOS\freeRTOS.lib">
+    <ClCompile Include="..\source\interface.c">
       <Filter>Source Files</Filter>
-    </Library>
-    <Library Include="..\lib\NIDAQmx.lib">
+    </ClCompile>
+    <ClCompile Include="..\source\mongoose.c">
       <Filter>Source Files</Filter>
-    </Library>
+    </ClCompile>
+    <ClCompile Include="..\source\sim_server.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="movement.h">
@@ -55,5 +47,13 @@
     <ClInclude Include="functions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="..\freeRTOS\freeRTOS.lib">
+      <Filter>Source Files</Filter>
+    </Library>
+    <Library Include="..\lib\NIDAQmx.lib">
+      <Filter>Source Files</Filter>
+    </Library>
   </ItemGroup>
 </Project>
