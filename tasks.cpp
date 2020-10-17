@@ -77,8 +77,8 @@ void cmd(void * pvParameters) {
 			printf("Coords:\n\t:");
 			scanf("%*c");
 			scanf("(%d,%d)", &coords[0], &coords[1]);
+			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 			xQueueSend(mbx_mov, &coords, 0);
-			xSemaphoreGive(sem_xzMov, portMAX_DELAY);
 
 		}
 		if (!comm.compare("exit")) {
@@ -102,7 +102,6 @@ void gotoXZ(void* pvParameters) {
 	int x, z;
 	int coords[2];
 	while (true) {
-		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 		xQueueReceive(mbx_mov, &coords, portMAX_DELAY);
 		printf("\n%d,%d\n", coords[0], coords[1]);
 
@@ -116,6 +115,8 @@ void gotoXZ(void* pvParameters) {
 		xSemaphoreTake(sem_xMov, portMAX_DELAY);
 		//wait for goto_z completion, synchronization
 		xSemaphoreTake(sem_zMov, portMAX_DELAY);
+
+		xSemaphoreGive(sem_xzMov, portMAX_DELAY);
 	}
 }
 
@@ -181,9 +182,9 @@ void myDaemonTaskStartupHook(void) {
 	mbx_mov = xQueueCreate(1, sizeof(Coords));
 	mbx_xMov = xQueueCreate(1, sizeof(int));
 	mbx_zMov = xQueueCreate(1, sizeof(int));
-	sem_xzMov = xSemaphoreCreateCounting(1, 0);
-	sem_xMov = xSemaphoreCreateCounting(1, 1);
-	sem_zMov = xSemaphoreCreateCounting(1, 1);
+	sem_xzMov = xSemaphoreCreateCounting(1, 1);
+	sem_xMov = xSemaphoreCreateCounting(1, 0);
+	sem_zMov = xSemaphoreCreateCounting(1, 0);
 	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
