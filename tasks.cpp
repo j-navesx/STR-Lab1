@@ -41,15 +41,22 @@ typedef struct {
 }zMov_param;
 
 typedef struct {
-	xQueueHandle mbx_Mov;
-	xSemaphoreHandle sem_Mov;
-}Mov_param;
+	xQueueHandle mbx_xzMov;
+	xSemaphoreHandle sem_xzMov;
+	xSemaphoreHandle sync_xzMov;
+}xzCom_param;
 
 typedef struct {
-	Mov_param* Mov_params;
+	xzCom_param* xzCom_params;
 	xMov_param* xMov_params;
 	zMov_param* zMov_params;
 }taskXZ_param;
+
+//Task Comunication params
+typedef struct {
+	//Will expand during development
+	xzCom_param* xzCom_params;
+}cmd_param;
 
 //MAILBOXES
 xQueueHandle mbx_keyb;
@@ -74,9 +81,14 @@ void kybControl(void * pvParameters) {
 
 void cmd(void * pvParameters) {
 	
-	Mov_param* cmd_params = (Mov_param*)pvParameters;
-	xQueueHandle mbx_Mov = cmd_params->mbx_Mov;
-	xSemaphoreHandle sem_Mov = cmd_params->sem_Mov;
+	//cmd needed parameters 
+	cmd_param* cmd_params = (cmd_param*)pvParameters;
+
+	//XZ comunication parameters 
+	xzCom_param* xzCom_params = cmd_params->xzCom_params;
+	xQueueHandle mbx_xzMov = xzCom_params->mbx_xzMov;
+	xSemaphoreHandle sem_xzMov = xzCom_params->sem_xzMov;
+	xSemaphoreHandle sync_xzMov = xzCom_params->sync_xzMov;
 
 	while (true) {
 		
@@ -93,8 +105,9 @@ void cmd(void * pvParameters) {
 			printf("Coords:\n\t:");
 			scanf("%*c");
 			scanf("(%d,%d)", &coords[0], &coords[1]);
-			xSemaphoreTake(sem_Mov, portMAX_DELAY);
-			xQueueSend(mbx_Mov, &coords, 0);
+			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+			xQueueSend(mbx_xzMov, &coords, 0);
+			xSemaphoreGive(sync_xzMov);
 
 		}
 		if (!comm.compare("info")) {
@@ -124,22 +137,28 @@ void gotoXZ(void* pvParameters) {
 	int x, z;
 	int coords[2];
 	
+	//XZ needed parameters 
 	taskXZ_param* gotoXZ_params = (taskXZ_param*)pvParameters;
 	
-	Mov_param* Mov_params = gotoXZ_params->Mov_params;
-	xQueueHandle mbx_Mov = Mov_params->mbx_Mov;
-	xSemaphoreHandle sem_Mov = Mov_params->sem_Mov;
+	//XZ comunication parameters 
+	xzCom_param* xzCom_params = gotoXZ_params->xzCom_params;
+	xQueueHandle mbx_xzMov = xzCom_params->mbx_xzMov;
+	xSemaphoreHandle sem_xzMov = xzCom_params->sem_xzMov;
+	xSemaphoreHandle sync_xzMov = xzCom_params->sync_xzMov;
 
+	//X movement parameters 
 	xMov_param* xMov_params = gotoXZ_params->xMov_params;
 	xQueueHandle mbx_xMov = xMov_params->mbx_xMov;
 	xSemaphoreHandle sem_xMov = xMov_params->sem_xMov;
 
+	//Z movement parameters 
 	zMov_param* zMov_params = gotoXZ_params->zMov_params;
 	xQueueHandle mbx_zMov = zMov_params->mbx_zMov;
 	xSemaphoreHandle sem_zMov = zMov_params->sem_zMov;
 
 	while (true) {
-		xQueueReceive(mbx_mov, &coords, portMAX_DELAY);
+		xSemaphoreTake(sync_xzMov, portMAX_DELAY);
+		xQueueReceive(mbx_xzMov, &coords, portMAX_DELAY);
 		printf("\n%d,%d\n", coords[0], coords[1]);
 
 		x = coords[0];
@@ -153,7 +172,7 @@ void gotoXZ(void* pvParameters) {
 		//wait for goto_z completion, synchronization
 		xSemaphoreTake(sem_zMov, portMAX_DELAY);
 
-		xSemaphoreGive(sem_Mov, portMAX_DELAY);
+		xSemaphoreGive(sem_xzMov);
 	}
 }
 
@@ -179,7 +198,7 @@ void gotoX(void* pvParameters) {
 			taskYIELD();
 		}
 		stopX();
-		xSemaphoreGive(sem_xMov, portMAX_DELAY);
+		xSemaphoreGive(sem_xMov);
 	}
 }
 
@@ -204,7 +223,7 @@ void gotoZ(void* pvParameters) {
 			taskYIELD();
 		}
 		stopZ();
-		xSemaphoreGive(sem_zMov, portMAX_DELAY);
+		xSemaphoreGive(sem_zMov);
 	}
 }
 
@@ -230,10 +249,10 @@ void myDaemonTaskStartupHook(void) {
 	StoreRequest grid[3][3];
 	fill(*grid, *grid + 9, NULL);
 
-	
-	Mov_param* my_Mov_param = (Mov_param*)pvPortMalloc(sizeof(Mov_param));
-	my_Mov_param->mbx_Mov = xQueueCreate(1, sizeof(Coords));
-	my_Mov_param->sem_Mov = xSemaphoreCreateCounting(1, 1);
+	xzCom_param* my_xzCom_param = (xzCom_param*)pvPortMalloc(sizeof(xzCom_param));
+	my_xzCom_param->mbx_xzMov = xQueueCreate(1, sizeof(Coords));
+	my_xzCom_param->sem_xzMov = xSemaphoreCreateCounting(1, 1);
+	my_xzCom_param->sync_xzMov = xSemaphoreCreateCounting(1, 0);
 
 	zMov_param* my_zMov_param = (zMov_param*)pvPortMalloc(sizeof(zMov_param));
 	my_zMov_param->mbx_zMov = xQueueCreate(1, sizeof(int));
@@ -244,13 +263,16 @@ void myDaemonTaskStartupHook(void) {
 	my_xMov_param->sem_xMov = xSemaphoreCreateCounting(1, 0);
 	
 	taskXZ_param* my_taskXZ_param = (taskXZ_param*)pvPortMalloc(sizeof(taskXZ_param));
-	my_taskXZ_param->Mov_params = my_Mov_param;
+	my_taskXZ_param->xzCom_params = my_xzCom_param;
 	my_taskXZ_param->xMov_params = my_xMov_param;
 	my_taskXZ_param->zMov_params = my_zMov_param;
+
+	cmd_param* my_cmd_param = (cmd_param*)pvPortMalloc(sizeof(cmd_param));
+	my_cmd_param->xzCom_params = my_xzCom_param;
 	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
-	xTaskCreate(cmd, "cmd", 100, my_Mov_param, 0, NULL);
+	xTaskCreate(cmd, "cmd", 100, my_cmd_param, 0, NULL);
 	xTaskCreate(gotoXZ, "gotoXZ", 100, my_taskXZ_param, 0, NULL);
 	xTaskCreate(gotoX, "gotoX", 100, my_xMov_param, 0, NULL);
 	xTaskCreate(gotoZ, "gotoZ", 100, my_zMov_param, 0, NULL);
