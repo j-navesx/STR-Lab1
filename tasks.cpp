@@ -258,6 +258,14 @@ void takeStock() {
 
 }
 
+void putPartInCell() {
+	
+}
+
+void takePartFromCell() {
+
+}
+
 void myDaemonTaskStartupHook(void) {
 	//Grid initialization
 	StorageRequest grid[3][3] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
