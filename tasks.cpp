@@ -262,9 +262,10 @@ void myDaemonTaskStartupHook(void) {
 	//Grid initialization
 	StorageRequest grid[3][3] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	
-	Mov_param* my_Mov_param = (Mov_param*)pvPortMalloc(sizeof(Mov_param));
-	my_Mov_param->mbx_Mov = xQueueCreate(1, sizeof(Coords));
-	my_Mov_param->sem_Mov = xSemaphoreCreateCounting(1, 1);
+	xzCom_param* my_xzCom_param = (xzCom_param*)pvPortMalloc(sizeof(xzCom_param));
+	my_xzCom_param->mbx_xzMov = xQueueCreate(1, sizeof(Coords));
+	my_xzCom_param->sem_xzMov = xSemaphoreCreateCounting(1, 1);
+	my_xzCom_param->sync_xzMov = xSemaphoreCreateCounting(1, 0);
 
 	zMov_param* my_zMov_param = (zMov_param*)pvPortMalloc(sizeof(zMov_param));
 	my_zMov_param->mbx_zMov = xQueueCreate(1, sizeof(int));
