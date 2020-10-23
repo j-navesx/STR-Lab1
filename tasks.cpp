@@ -23,7 +23,12 @@ typedef struct {
 	int reference;
 	int entryDate;
 	int expiration;
-}StoreRequest;
+}StorageRequest;
+
+typedef struct {
+	xQueueHandle mbx_server;
+	int spaces_available;
+}StorageServer;
 
 typedef struct {
 	int xcord;
@@ -79,6 +84,17 @@ void kybControl(void * pvParameters) {
 
 }
 
+void infoMenu() {
+	while (true) {
+		printf("n");
+		if (_kbhit()) {
+			char input = _getch();
+			printf("Number %c", input);
+		}
+	}
+	
+}
+
 void cmd(void * pvParameters) {
 	
 	//cmd needed parameters 
@@ -111,10 +127,7 @@ void cmd(void * pvParameters) {
 
 		}
 		if (!comm.compare("info")) {
-			while (true) {
-				system("cls");
-				printf("Hello World\n");
-			}
+			infoMenu();
 		}
 		if (!comm.compare("exit")) {
 			exit(0);
@@ -246,13 +259,12 @@ void takeStock() {
 }
 
 void myDaemonTaskStartupHook(void) {
-	StoreRequest grid[3][3];
-	fill(*grid, *grid + 9, NULL);
-
-	xzCom_param* my_xzCom_param = (xzCom_param*)pvPortMalloc(sizeof(xzCom_param));
-	my_xzCom_param->mbx_xzMov = xQueueCreate(1, sizeof(Coords));
-	my_xzCom_param->sem_xzMov = xSemaphoreCreateCounting(1, 1);
-	my_xzCom_param->sync_xzMov = xSemaphoreCreateCounting(1, 0);
+	//Grid initialization
+	StorageRequest grid[3][3] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+	
+	Mov_param* my_Mov_param = (Mov_param*)pvPortMalloc(sizeof(Mov_param));
+	my_Mov_param->mbx_Mov = xQueueCreate(1, sizeof(Coords));
+	my_Mov_param->sem_Mov = xSemaphoreCreateCounting(1, 1);
 
 	zMov_param* my_zMov_param = (zMov_param*)pvPortMalloc(sizeof(zMov_param));
 	my_zMov_param->mbx_zMov = xQueueCreate(1, sizeof(int));
