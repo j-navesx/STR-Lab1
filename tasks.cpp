@@ -240,6 +240,7 @@ void takeStock() {
 }
 
 void myDaemonTaskStartupHook(void) {
+	//Grid initialization
 	StorageRequest grid[3][3] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	
 	Mov_param* my_Mov_param = (Mov_param*)pvPortMalloc(sizeof(Mov_param));
