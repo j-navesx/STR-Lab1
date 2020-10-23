@@ -92,7 +92,7 @@ void infoMenu() {
 			printf("Number %c", input);
 		}
 	}
-	
+
 }
 
 void cmd(void * pvParameters) {
