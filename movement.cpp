@@ -231,26 +231,6 @@ int getZPos() {
 	}
 }*/
 
-void putPartInCell() {
-	uInt8 p = readDigitalU8(1);
-	if (getBitValue(p, 4)) {
-		//gotoZUp();
-		//gotoY(1);
-		//gotoZDown();
-		//gotoY(2);
-	}
-}
-
-void takePartFromCell() {
-	uInt8 p = readDigitalU8(1);
-	if (!getBitValue(p, 4)) {
-		//gotoY(1);
-		//gotoZUp();
-		//gotoY(2);
-		//gotoZDown();
-	}
-}
-
 // RESET:
 void resetPos() {
 	moveXRight();
