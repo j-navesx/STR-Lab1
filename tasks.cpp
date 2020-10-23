@@ -41,6 +41,19 @@ typedef struct {
 }xMov_param;
 
 typedef struct {
+	xQueueHandle mbx_yMov;
+	xSemaphoreHandle sem_yMov;
+}yMov_param;
+
+typedef struct {
+	xSemaphoreHandle sem_zDownMov;
+}zDownMov_param;
+
+typedef struct {
+	xSemaphoreHandle sem_zUpMov;
+}zUpMov_param;
+
+typedef struct {
 	xQueueHandle mbx_zMov;
 	xSemaphoreHandle sem_zMov;
 }zMov_param;
@@ -48,7 +61,6 @@ typedef struct {
 typedef struct {
 	xQueueHandle mbx_xzMov;
 	xSemaphoreHandle sem_xzMov;
-	xSemaphoreHandle sync_xzMov;
 }xzCom_param;
 
 typedef struct {
@@ -104,7 +116,6 @@ void cmd(void * pvParameters) {
 	xzCom_param* xzCom_params = cmd_params->xzCom_params;
 	xQueueHandle mbx_xzMov = xzCom_params->mbx_xzMov;
 	xSemaphoreHandle sem_xzMov = xzCom_params->sem_xzMov;
-	xSemaphoreHandle sync_xzMov = xzCom_params->sync_xzMov;
 
 	while (true) {
 		
@@ -121,9 +132,8 @@ void cmd(void * pvParameters) {
 			printf("Coords:\n\t:");
 			scanf("%*c");
 			scanf("(%d,%d)", &coords[0], &coords[1]);
-			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 			xQueueSend(mbx_xzMov, &coords, 0);
-			xSemaphoreGive(sync_xzMov);
+			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 
 		}
 		if (!comm.compare("info")) {
@@ -157,7 +167,6 @@ void gotoXZ(void* pvParameters) {
 	xzCom_param* xzCom_params = gotoXZ_params->xzCom_params;
 	xQueueHandle mbx_xzMov = xzCom_params->mbx_xzMov;
 	xSemaphoreHandle sem_xzMov = xzCom_params->sem_xzMov;
-	xSemaphoreHandle sync_xzMov = xzCom_params->sync_xzMov;
 
 	//X movement parameters 
 	xMov_param* xMov_params = gotoXZ_params->xMov_params;
@@ -170,7 +179,6 @@ void gotoXZ(void* pvParameters) {
 	xSemaphoreHandle sem_zMov = zMov_params->sem_zMov;
 
 	while (true) {
-		xSemaphoreTake(sync_xzMov, portMAX_DELAY);
 		xQueueReceive(mbx_xzMov, &coords, portMAX_DELAY);
 		printf("\n%d,%d\n", coords[0], coords[1]);
 
@@ -240,6 +248,69 @@ void gotoZ(void* pvParameters) {
 	}
 }
 
+void gotoY(void* pvParameters) {
+	int y;
+	int crtpos;
+
+	yMov_param* yMov_params = (yMov_param*)pvParameters;
+	xQueueHandle mbx_yMov = yMov_params->mbx_yMov;
+	xSemaphoreHandle sem_yMov = yMov_params->sem_yMov;
+
+	while (true) {
+		xQueueReceive(mbx_yMov, &y, portMAX_DELAY);
+		crtpos = getYPos();
+
+		if (crtpos > y)
+			moveYIn();
+		else
+			if (crtpos < y)
+				moveYOut();
+		while (getYPos() != y) {
+			taskYIELD();
+		}
+		stopY();
+		xSemaphoreGive(sem_yMov);
+	}
+}
+
+void gotoZUp(void* pvParameters) {
+	int z;
+	zUpMov_param* zUpMov_params = (zUpMov_param*)pvParameters;
+	xSemaphoreHandle sem_zUpMov = zUpMov_params->sem_zUpMov;
+
+	while (1) {
+		xSemaphoreTake(sem_zUpMov, portMAX_DELAY);
+		moveZUp();
+
+		uInt8 p0 = readDigitalU8(0);
+		uInt8 p1 = readDigitalU8(1);
+		if (!getBitValue(p1, 2) || !getBitValue(p1, 0) || !getBitValue(p0, 6)) {
+			taskYIELD();
+		}
+		stopZ();
+		xSemaphoreGive(sem_zUpMov);
+	}
+}
+
+void gotoZDown(void* pvParameters) {
+	int z;
+	zDownMov_param* zDownMov_params = (zDownMov_param*)pvParameters;
+	xSemaphoreHandle sem_zDownMov = zDownMov_params->sem_zDownMov;
+
+	while (1) {
+		xSemaphoreTake(sem_zDownMov, portMAX_DELAY);
+		moveZDown();
+
+		uInt8 p0 = readDigitalU8(0);
+		uInt8 p1 = readDigitalU8(1);
+		if (!getBitValue(p1, 3) || !getBitValue(p1, 1) || !getBitValue(p0, 7)) {
+			taskYIELD();
+		}
+		stopZ();
+		xSemaphoreGive(sem_zDownMov);
+	}
+}
+
 void gotoDock() {
 
 }
@@ -258,30 +329,31 @@ void takeStock() {
 
 }
 
-void putPartInCell() {
-	
-}
-
-void takePartFromCell() {
-
-}
-
 void myDaemonTaskStartupHook(void) {
 	//Grid initialization
 	StorageRequest grid[3][3] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	
 	xzCom_param* my_xzCom_param = (xzCom_param*)pvPortMalloc(sizeof(xzCom_param));
 	my_xzCom_param->mbx_xzMov = xQueueCreate(1, sizeof(Coords));
-	my_xzCom_param->sem_xzMov = xSemaphoreCreateCounting(1, 1);
-	my_xzCom_param->sync_xzMov = xSemaphoreCreateCounting(1, 0);
+	my_xzCom_param->sem_xzMov = xSemaphoreCreateCounting(1, 0);
 
 	zMov_param* my_zMov_param = (zMov_param*)pvPortMalloc(sizeof(zMov_param));
 	my_zMov_param->mbx_zMov = xQueueCreate(1, sizeof(int));
 	my_zMov_param->sem_zMov = xSemaphoreCreateCounting(1, 0);
 
+	zDownMov_param* my_zDownMov_param = (zDownMov_param*)pvPortMalloc(sizeof(zDownMov_param));
+	my_zDownMov_param->sem_zDownMov = xSemaphoreCreateCounting(1, 0);
+
+	zUpMov_param* my_zUpMov_param = (zUpMov_param*)pvPortMalloc(sizeof(zUpMov_param));
+	my_zUpMov_param->sem_zUpMov = xSemaphoreCreateCounting(1, 0);
+
 	xMov_param* my_xMov_param = (xMov_param*)pvPortMalloc(sizeof(xMov_param));
 	my_xMov_param->mbx_xMov = xQueueCreate(1, sizeof(int));
 	my_xMov_param->sem_xMov = xSemaphoreCreateCounting(1, 0);
+
+	yMov_param* my_yMov_param = (yMov_param*)pvPortMalloc(sizeof(yMov_param));
+	my_yMov_param->mbx_yMov = xQueueCreate(1, sizeof(int));
+	my_yMov_param->sem_yMov = xSemaphoreCreateCounting(1, 0);
 	
 	taskXZ_param* my_taskXZ_param = (taskXZ_param*)pvPortMalloc(sizeof(taskXZ_param));
 	my_taskXZ_param->xzCom_params = my_xzCom_param;
@@ -297,5 +369,8 @@ void myDaemonTaskStartupHook(void) {
 	xTaskCreate(gotoXZ, "gotoXZ", 100, my_taskXZ_param, 0, NULL);
 	xTaskCreate(gotoX, "gotoX", 100, my_xMov_param, 0, NULL);
 	xTaskCreate(gotoZ, "gotoZ", 100, my_zMov_param, 0, NULL);
+	xTaskCreate(gotoZUp, "gotoZUp", 100, my_zUpMov_param, 0, NULL);
+	xTaskCreate(gotoZDown, "gotoZDown", 100, my_zDownMov_param, 0, NULL);
+	xTaskCreate(gotoY, "gotoY", 100, my_yMov_param, 0, NULL);
 	initialisePorts();
 }
