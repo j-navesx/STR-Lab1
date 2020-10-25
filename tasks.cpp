@@ -299,11 +299,15 @@ void gotoZUp(void* pvParameters) {
 
 		uInt8 p0 = readDigitalU8(0);
 		uInt8 p1 = readDigitalU8(1);
-		if (!getBitValue(p1, 2) || !getBitValue(p1, 0) || !getBitValue(p0, 6)) {
+
+		while (getBitValue(p1, 2) && getBitValue(p1, 0) && getBitValue(p0, 6)) {
+			p0 = readDigitalU8(0);
+			p1 = readDigitalU8(1);
 			taskYIELD();
 		}
 		stopZ();
 		xSemaphoreGive(sem_zUpMov);
+		vTaskDelay(1);
 	}
 }
 
@@ -317,11 +321,15 @@ void gotoZDown(void* pvParameters) {
 
 		uInt8 p0 = readDigitalU8(0);
 		uInt8 p1 = readDigitalU8(1);
-		if (!getBitValue(p1, 3) || !getBitValue(p1, 1) || !getBitValue(p0, 7)) {
+
+		while (getBitValue(p1, 3) && getBitValue(p1, 1) && getBitValue(p0, 7)) {
+			p0 = readDigitalU8(0);
+			p1 = readDigitalU8(1);
 			taskYIELD();
 		}
 		stopZ();
 		xSemaphoreGive(sem_zDownMov);
+		vTaskDelay(1);
 	}
 }
 
@@ -353,6 +361,7 @@ void putPartInCell(void* pvParameters) {
 
 		//gotoZUp();
 		xSemaphoreGive(sem_zUpMov);
+		vTaskDelay(1);
 		xSemaphoreTake(sem_zUpMov, portMAX_DELAY);
 		//gotoY(1);
 		y = 1;
@@ -360,6 +369,7 @@ void putPartInCell(void* pvParameters) {
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 		//gotoZDown();
 		xSemaphoreGive(sem_zDownMov);
+		vTaskDelay(1);
 		xSemaphoreTake(sem_zDownMov, portMAX_DELAY);
 		//gotoY(2);
 		y = 2;
@@ -367,6 +377,7 @@ void putPartInCell(void* pvParameters) {
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 
 		xSemaphoreGive(sem_putInCellMov);
+		vTaskDelay(1);
 	}
 }
 
@@ -402,6 +413,7 @@ void takePartFromCell(void* pvParameters) {
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 		//gotoZUp();
 		xSemaphoreGive(sem_zUpMov);
+		vTaskDelay(1);
 		xSemaphoreTake(sem_zUpMov, portMAX_DELAY);
 		//gotoY(2);
 		y = 2;
@@ -409,27 +421,38 @@ void takePartFromCell(void* pvParameters) {
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 		//gotoZDown();
 		xSemaphoreGive(sem_zDownMov);
+		vTaskDelay(1);
 		xSemaphoreTake(sem_zDownMov, portMAX_DELAY);
 
 		xSemaphoreGive(sem_takeFromCellMov);
+		vTaskDelay(1);
 	}
 }
 
-void gotoDock() {
+void addStock(void* pvParameters) {
 
-}
+	//gotoXZ(1,1)
+	//gotoY(3)
+	//receive
+	//gotoY(2)
 
-void addStock() {
+	//If(x,z)
+		//gotoXZ(x,z)
+	//If(NULL,NULL)
+		//Choose a free position near the dock 
 
-	//Msg gridMovement
 	//putPartInCell();
-
 }
 
-void takeStock() {
+void takeStock(void* pvParameters) {
 
-	//Msg gridMovement
+	//goto(x,z) (x,z) is the position os the item
 	//takePartFromCell();
+
+	//gotoXZ(1,1)
+	//gotoY(3)
+	//deliver
+	//gotoY(2)
 
 }
 
