@@ -72,6 +72,25 @@ typedef struct {
 }putInCellCom_param;
 
 typedef struct {
+	xQueueHandle mbx_addStockMov;
+	xSemaphoreHandle sem_addStockMov;
+}addStockCom_param;
+
+typedef struct {
+	xQueueHandle mbx_takeStockMov;
+	xSemaphoreHandle sem_takeStockMov;
+}takeStockCom_param;
+
+typedef struct {
+	xzCom_param* xzCom_params;
+	yMov_param* yMov_params;
+	putInCellCom_param* putInCellCom_params;
+	takeFromCellCom_param* takeFromCellCom_params;
+	addStockCom_param* addStockCom_params;
+	takeStockCom_param* takeStockCom_params;
+}taskStockMov_param;
+
+typedef struct {
 	yMov_param* yMov_params;
 	zDownMov_param* zDownMov_params;
 	zUpMov_param* zUpMov_params;
@@ -89,6 +108,8 @@ typedef struct {
 typedef struct {
 	//Will expand during development
 	xzCom_param* xzCom_params;
+	addStockCom_param* addStockCom_params;
+	takeStockCom_param* takeStockCom_params;
 }cmd_param;
 
 //MAILBOXES
@@ -133,6 +154,16 @@ void cmd(void * pvParameters) {
 	xQueueHandle mbx_xzMov = xzCom_params->mbx_xzMov;
 	xSemaphoreHandle sem_xzMov = xzCom_params->sem_xzMov;
 
+	//addStock comunication parameters 
+	addStockCom_param* addStockCom_params = cmd_params->addStockCom_params;
+	xQueueHandle mbx_addStockMov = addStockCom_params->mbx_addStockMov;
+	xSemaphoreHandle sem_addStockMov = addStockCom_params->sem_addStockMov;
+
+	//takeStock comunication parameters 
+	takeStockCom_param* takeStockCom_params = cmd_params->takeStockCom_params;
+	xQueueHandle mbx_takeStockMov = takeStockCom_params->mbx_takeStockMov;
+	xSemaphoreHandle sem_takeStockMov = takeStockCom_params->sem_takeStockMov;
+
 	while (true) {
 		
 		//system("cls");
@@ -150,7 +181,6 @@ void cmd(void * pvParameters) {
 			scanf("(%d,%d)", &coords[0], &coords[1]);
 			xQueueSend(mbx_xzMov, &coords, 0);
 			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
-
 		}
 		if (!comm.compare("info")) {
 			infoMenu();
@@ -160,17 +190,6 @@ void cmd(void * pvParameters) {
 		}
 	}
 }
-
-/*void gridMovement(void* pvParameters) {
-	while (true) {
-		int coords[2];
-		xQueueReceive(mbx_mov, &coords, portMAX_DELAY);
-		printf("\n%d,%d\n", coords[0], coords[1]);
-	}
-	//Wait for msg from addStock or takeStock()
-	//msg xMovement and zMovement()
-	xSemaphoreGive(sem_xzMov);
-}*/
 
 void gotoXZ(void* pvParameters) {
 	int x, z;
@@ -196,7 +215,7 @@ void gotoXZ(void* pvParameters) {
 
 	while (true) {
 		xQueueReceive(mbx_xzMov, &coords, portMAX_DELAY);
-		printf("\n%d,%d\n", coords[0], coords[1]);
+		//printf("\n%d,%d\n", coords[0], coords[1]);
 
 		x = coords[0];
 		z = coords[1];
@@ -430,34 +449,115 @@ void takePartFromCell(void* pvParameters) {
 }
 
 void addStock(void* pvParameters) {
+	int y;
+	int user[2];
+	int dock[2] = { 1, 1 };
 
-	//gotoXZ(1,1)
-	//gotoY(3)
-	//receive
-	//gotoY(2)
+	//addStock needed parameters 
+	taskStockMov_param* taskStockMov_params = (taskStockMov_param*)pvParameters;
 
-	//If(x,z)
-		//gotoXZ(x,z)
-	//If(NULL,NULL)
-		//Choose a free position near the dock 
+	//addStock comunication parameters 
+	addStockCom_param* addStockCom_params = taskStockMov_params->addStockCom_params;
+	xQueueHandle mbx_addStockMov = addStockCom_params->mbx_addStockMov;
+	xSemaphoreHandle sem_addStockMov = addStockCom_params->sem_addStockMov;
 
-	//putPartInCell();
+	//putPartInCell comunication parameters 
+	putInCellCom_param* putInCellCom_params = taskStockMov_params->putInCellCom_params;
+	xSemaphoreHandle sem_putInCellMov = putInCellCom_params->sem_putInCellMov;
+
+	//XZ comunication parameters 
+	xzCom_param* xzCom_params = taskStockMov_params->xzCom_params;
+	xQueueHandle mbx_xzMov = xzCom_params->mbx_xzMov;
+	xSemaphoreHandle sem_xzMov = xzCom_params->sem_xzMov;
+
+	//Y movement parameters 
+	yMov_param* yMov_params = taskStockMov_params->yMov_params;
+	xQueueHandle mbx_yMov = yMov_params->mbx_yMov;
+	xSemaphoreHandle sem_yMov = yMov_params->sem_yMov;
+
+	while (1) {
+		xQueueReceive(mbx_addStockMov, &user, portMAX_DELAY);
+
+		//gotoXZ(1,1)
+		xQueueSend(mbx_xzMov, &dock, portMAX_DELAY);
+		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+		//gotoY(3)
+		y = 3;
+		xQueueSend(mbx_yMov, &y, 0);
+		xSemaphoreTake(sem_yMov, portMAX_DELAY);
+		//receive
+		//gotoY(2)
+		y = 2;
+		xQueueSend(mbx_yMov, &y, 0);
+		xSemaphoreTake(sem_yMov, portMAX_DELAY);
+		//gotoXZ(x,z), (x,z) is the position chosen by the user or the system
+		xQueueSend(mbx_xzMov, &user, portMAX_DELAY);
+		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+		//putPartInCell();
+		xSemaphoreGive(sem_putInCellMov);
+		vTaskDelay(1);
+		xSemaphoreTake(sem_putInCellMov, portMAX_DELAY);
+
+		xSemaphoreGive(sem_addStockMov);
+	}
 }
 
 void takeStock(void* pvParameters) {
+	int y;
+	int user[2];
+	int dock[2] = { 1, 1 };
 
-	//goto(x,z) (x,z) is the position os the item
-	//takePartFromCell();
+	//takeStock needed parameters 
+	taskStockMov_param* taskStockMov_params = (taskStockMov_param*)pvParameters;
 
-	//gotoXZ(1,1)
-	//gotoY(3)
-	//deliver
-	//gotoY(2)
+	//takeStock comunication parameters 
+	takeStockCom_param* takeStockCom_params = taskStockMov_params->takeStockCom_params;
+	xQueueHandle mbx_takeStockMov = takeStockCom_params->mbx_takeStockMov;
+	xSemaphoreHandle sem_takeStockMov = takeStockCom_params->sem_takeStockMov;
 
+	//takePartFromCell comunication parameters 
+	takeFromCellCom_param* takeFromCellCom_params = taskStockMov_params->takeFromCellCom_params;
+	xSemaphoreHandle sem_takeFromCellMov = takeFromCellCom_params->sem_takeFromCellMov;
+
+	//XZ comunication parameters 
+	xzCom_param* xzCom_params = taskStockMov_params->xzCom_params;
+	xQueueHandle mbx_xzMov = xzCom_params->mbx_xzMov;
+	xSemaphoreHandle sem_xzMov = xzCom_params->sem_xzMov;
+
+	//Y movement parameters 
+	yMov_param* yMov_params = taskStockMov_params->yMov_params;
+	xQueueHandle mbx_yMov = yMov_params->mbx_yMov;
+	xSemaphoreHandle sem_yMov = yMov_params->sem_yMov;
+
+	while (1) {
+		xQueueReceive(mbx_takeStockMov, &user, portMAX_DELAY);
+
+		//goto(x,z), (x,z) is the position of the item
+		xQueueSend(mbx_xzMov, &user, portMAX_DELAY);
+		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+		//takePartFromCell();
+		xSemaphoreGive(sem_takeFromCellMov);
+		vTaskDelay(1);
+		xSemaphoreTake(sem_takeFromCellMov, portMAX_DELAY);
+		//gotoXZ(1,1)
+		xQueueSend(mbx_xzMov, &dock, portMAX_DELAY);
+		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+		//gotoY(3)
+		y = 3;
+		xQueueSend(mbx_yMov, &y, 0);
+		xSemaphoreTake(sem_yMov, portMAX_DELAY);
+		//deliver
+		//gotoY(2)
+		y = 2;
+		xQueueSend(mbx_yMov, &y, 0);
+		xSemaphoreTake(sem_yMov, portMAX_DELAY);
+
+		xSemaphoreGive(sem_takeStockMov);
+	}
 }
 
 void myDaemonTaskStartupHook(void) {
-	//Grid initialization
+	//Grid initialization 
 	StorageRequest grid[3][3] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	
 	xzCom_param* my_xzCom_param = (xzCom_param*)pvPortMalloc(sizeof(xzCom_param));
@@ -487,6 +587,14 @@ void myDaemonTaskStartupHook(void) {
 
 	putInCellCom_param* my_putInCellCom_param = (putInCellCom_param*)pvPortMalloc(sizeof(putInCellCom_param));
 	my_putInCellCom_param->sem_putInCellMov = xSemaphoreCreateCounting(1, 0);
+
+	addStockCom_param* my_addStockCom_param = (addStockCom_param*)pvPortMalloc(sizeof(addStockCom_param));
+	my_addStockCom_param->mbx_addStockMov = xQueueCreate(1, sizeof(Coords));
+	my_addStockCom_param->sem_addStockMov = xSemaphoreCreateCounting(1, 0);
+
+	takeStockCom_param* my_takeStockCom_param = (takeStockCom_param*)pvPortMalloc(sizeof(takeStockCom_param));
+	my_takeStockCom_param->mbx_takeStockMov = xQueueCreate(1, sizeof(Coords));
+	my_takeStockCom_param->sem_takeStockMov = xSemaphoreCreateCounting(1, 0);
 	
 	taskXZ_param* my_taskXZ_param = (taskXZ_param*)pvPortMalloc(sizeof(taskXZ_param));
 	my_taskXZ_param->xzCom_params = my_xzCom_param;
@@ -500,8 +608,18 @@ void myDaemonTaskStartupHook(void) {
 	my_tasksCellMov_param->takeFromCellCom_params = my_takeFromCellCom_param;
 	my_tasksCellMov_param->putInCellCom_params = my_putInCellCom_param;
 
+	taskStockMov_param* my_taskStockMov_param = (taskStockMov_param*)pvPortMalloc(sizeof(taskStockMov_param));
+	my_taskStockMov_param->xzCom_params = my_xzCom_param;
+	my_taskStockMov_param->yMov_params = my_yMov_param;
+	my_taskStockMov_param->takeFromCellCom_params = my_takeFromCellCom_param;
+	my_taskStockMov_param->putInCellCom_params = my_putInCellCom_param;
+	my_taskStockMov_param->addStockCom_params = my_addStockCom_param;
+	my_taskStockMov_param->takeStockCom_params = my_takeStockCom_param;
+
 	cmd_param* my_cmd_param = (cmd_param*)pvPortMalloc(sizeof(cmd_param));
 	my_cmd_param->xzCom_params = my_xzCom_param;
+	my_cmd_param->addStockCom_params = my_addStockCom_param;
+	my_cmd_param->takeStockCom_params = my_takeStockCom_param;
 	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
@@ -514,5 +632,7 @@ void myDaemonTaskStartupHook(void) {
 	xTaskCreate(gotoY, "gotoY", 100, my_yMov_param, 0, NULL);
 	xTaskCreate(takePartFromCell, "takePartFromCell", 100, my_tasksCellMov_param, 0, NULL);
 	xTaskCreate(putPartInCell, "putPartInCell", 100, my_tasksCellMov_param, 0, NULL);
+	xTaskCreate(addStock, "addStock", 100, my_taskStockMov_param, 0, NULL);
+	xTaskCreate(takeStock, "takeStock", 100, my_taskStockMov_param, 0, NULL);
 	initialisePorts();
 }
