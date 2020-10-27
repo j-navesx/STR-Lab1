@@ -47,10 +47,12 @@ typedef struct {
 
 typedef struct {
 	xSemaphoreHandle sem_zDownMov;
+	xSemaphoreHandle sem_zDownMov_done;
 }zDownMov_param;
 
 typedef struct {
 	xSemaphoreHandle sem_zUpMov;
+	xSemaphoreHandle sem_zUpMov_done;
 }zUpMov_param;
 
 typedef struct {
@@ -65,10 +67,12 @@ typedef struct {
 
 typedef struct {
 	xSemaphoreHandle sem_takeFromCellMov;
+	xSemaphoreHandle sem_takeFromCellMov_done;
 }takeFromCellCom_param;
 
 typedef struct {
 	xSemaphoreHandle sem_putInCellMov;
+	xSemaphoreHandle sem_putInCellMov_done;
 }putInCellCom_param;
 
 typedef struct {
@@ -102,6 +106,7 @@ typedef struct {
 	xzCom_param* xzCom_params;
 	xMov_param* xMov_params;
 	zMov_param* zMov_params;
+	yMov_param* yMov_params;
 }taskXZ_param;
 
 //Task Comunication params
@@ -192,7 +197,7 @@ void cmd(void * pvParameters) {
 }
 
 void gotoXZ(void* pvParameters) {
-	int x, z;
+	int x, z, y;
 	int coords[2];
 	
 	//XZ needed parameters 
@@ -213,9 +218,20 @@ void gotoXZ(void* pvParameters) {
 	xQueueHandle mbx_zMov = zMov_params->mbx_zMov;
 	xSemaphoreHandle sem_zMov = zMov_params->sem_zMov;
 
+	//Y movement parameters 
+	yMov_param* yMov_params = gotoXZ_params->yMov_params;
+	xQueueHandle mbx_yMov = yMov_params->mbx_yMov;
+	xSemaphoreHandle sem_yMov = yMov_params->sem_yMov;
+
 	while (true) {
 		xQueueReceive(mbx_xzMov, &coords, portMAX_DELAY);
 		//printf("\n%d,%d\n", coords[0], coords[1]);
+
+		if (getYPos() != 2) {
+			y = 2;
+			xQueueSend(mbx_yMov, &y, portMAX_DELAY);
+			xSemaphoreTake(sem_yMov, portMAX_DELAY);
+		}
 
 		x = coords[0];
 		z = coords[1];
@@ -311,6 +327,7 @@ void gotoY(void* pvParameters) {
 void gotoZUp(void* pvParameters) {
 	zUpMov_param* zUpMov_params = (zUpMov_param*)pvParameters;
 	xSemaphoreHandle sem_zUpMov = zUpMov_params->sem_zUpMov;
+	xSemaphoreHandle sem_zUpMov_done = zUpMov_params->sem_zUpMov_done;
 
 	while (1) {
 		xSemaphoreTake(sem_zUpMov, portMAX_DELAY);
@@ -325,14 +342,14 @@ void gotoZUp(void* pvParameters) {
 			taskYIELD();
 		}
 		stopZ();
-		xSemaphoreGive(sem_zUpMov);
-		vTaskDelay(1);
+		xSemaphoreGive(sem_zUpMov_done);
 	}
 }
 
 void gotoZDown(void* pvParameters) {
 	zDownMov_param* zDownMov_params = (zDownMov_param*)pvParameters;
 	xSemaphoreHandle sem_zDownMov = zDownMov_params->sem_zDownMov;
+	xSemaphoreHandle sem_zDownMov_done = zDownMov_params->sem_zDownMov_done;
 
 	while (1) {
 		xSemaphoreTake(sem_zDownMov, portMAX_DELAY);
@@ -347,8 +364,7 @@ void gotoZDown(void* pvParameters) {
 			taskYIELD();
 		}
 		stopZ();
-		xSemaphoreGive(sem_zDownMov);
-		vTaskDelay(1);
+		xSemaphoreGive(sem_zDownMov_done);
 	}
 }
 
@@ -361,14 +377,17 @@ void putPartInCell(void* pvParameters) {
 	//putPartInCell comunication parameters 
 	putInCellCom_param* putInCellCom_params = tasksCellMov_params->putInCellCom_params;
 	xSemaphoreHandle sem_putInCellMov = putInCellCom_params->sem_putInCellMov;
+	xSemaphoreHandle sem_putInCellMov_done = putInCellCom_params->sem_putInCellMov_done;
 
 	//ZUp movement parameters 
 	zUpMov_param* zUpMov_params = tasksCellMov_params->zUpMov_params;
 	xSemaphoreHandle sem_zUpMov = zUpMov_params->sem_zUpMov;
+	xSemaphoreHandle sem_zUpMov_done = zUpMov_params->sem_zUpMov_done;
 
 	//ZDown movement parameters 
 	zDownMov_param* zDownMov_params = tasksCellMov_params->zDownMov_params;
 	xSemaphoreHandle sem_zDownMov = zDownMov_params->sem_zDownMov;
+	xSemaphoreHandle sem_zDownMov_done = zDownMov_params->sem_zDownMov_done;
 
 	//Y movement parameters 
 	yMov_param* yMov_params = tasksCellMov_params->yMov_params;
@@ -380,23 +399,20 @@ void putPartInCell(void* pvParameters) {
 
 		//gotoZUp();
 		xSemaphoreGive(sem_zUpMov);
-		vTaskDelay(1);
-		xSemaphoreTake(sem_zUpMov, portMAX_DELAY);
+		xSemaphoreTake(sem_zUpMov_done, portMAX_DELAY);
 		//gotoY(1);
 		y = 1;
 		xQueueSend(mbx_yMov, &y, 0);
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 		//gotoZDown();
 		xSemaphoreGive(sem_zDownMov);
-		vTaskDelay(1);
-		xSemaphoreTake(sem_zDownMov, portMAX_DELAY);
+		xSemaphoreTake(sem_zDownMov_done, portMAX_DELAY);
 		//gotoY(2);
 		y = 2;
 		xQueueSend(mbx_yMov, &y, 0);
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 
-		xSemaphoreGive(sem_putInCellMov);
-		vTaskDelay(1);
+		xSemaphoreGive(sem_putInCellMov_done);
 	}
 }
 
@@ -409,14 +425,17 @@ void takePartFromCell(void* pvParameters) {
 	//takePartFromCell comunication parameters 
 	takeFromCellCom_param* takeFromCellCom_params = tasksCellMov_params->takeFromCellCom_params;
 	xSemaphoreHandle sem_takeFromCellMov = takeFromCellCom_params->sem_takeFromCellMov;
+	xSemaphoreHandle sem_takeFromCellMov_done = takeFromCellCom_params->sem_takeFromCellMov_done;
 
 	//ZUp movement parameters 
 	zUpMov_param* zUpMov_params = tasksCellMov_params->zUpMov_params;
 	xSemaphoreHandle sem_zUpMov = zUpMov_params->sem_zUpMov;
+	xSemaphoreHandle sem_zUpMov_done = zUpMov_params->sem_zUpMov_done;
 
 	//ZDown movement parameters 
 	zDownMov_param* zDownMov_params = tasksCellMov_params->zDownMov_params;
 	xSemaphoreHandle sem_zDownMov = zDownMov_params->sem_zDownMov;
+	xSemaphoreHandle sem_zDownMov_done = zDownMov_params->sem_zDownMov_done;
 
 	//Y movement parameters 
 	yMov_param* yMov_params = tasksCellMov_params->yMov_params;
@@ -432,19 +451,16 @@ void takePartFromCell(void* pvParameters) {
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 		//gotoZUp();
 		xSemaphoreGive(sem_zUpMov);
-		vTaskDelay(1);
-		xSemaphoreTake(sem_zUpMov, portMAX_DELAY);
+		xSemaphoreTake(sem_zUpMov_done, portMAX_DELAY);
 		//gotoY(2);
 		y = 2;
 		xQueueSend(mbx_yMov, &y, 0);
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 		//gotoZDown();
 		xSemaphoreGive(sem_zDownMov);
-		vTaskDelay(1);
-		xSemaphoreTake(sem_zDownMov, portMAX_DELAY);
+		xSemaphoreTake(sem_zDownMov_done, portMAX_DELAY);
 
-		xSemaphoreGive(sem_takeFromCellMov);
-		vTaskDelay(1);
+		xSemaphoreGive(sem_takeFromCellMov_done);
 	}
 }
 
@@ -464,6 +480,7 @@ void addStock(void* pvParameters) {
 	//putPartInCell comunication parameters 
 	putInCellCom_param* putInCellCom_params = taskStockMov_params->putInCellCom_params;
 	xSemaphoreHandle sem_putInCellMov = putInCellCom_params->sem_putInCellMov;
+	xSemaphoreHandle sem_putInCellMov_done = putInCellCom_params->sem_putInCellMov_done;
 
 	//XZ comunication parameters 
 	xzCom_param* xzCom_params = taskStockMov_params->xzCom_params;
@@ -495,8 +512,7 @@ void addStock(void* pvParameters) {
 		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 		//putPartInCell();
 		xSemaphoreGive(sem_putInCellMov);
-		vTaskDelay(1);
-		xSemaphoreTake(sem_putInCellMov, portMAX_DELAY);
+		xSemaphoreTake(sem_putInCellMov_done, portMAX_DELAY);
 
 		xSemaphoreGive(sem_addStockMov);
 	}
@@ -518,6 +534,7 @@ void takeStock(void* pvParameters) {
 	//takePartFromCell comunication parameters 
 	takeFromCellCom_param* takeFromCellCom_params = taskStockMov_params->takeFromCellCom_params;
 	xSemaphoreHandle sem_takeFromCellMov = takeFromCellCom_params->sem_takeFromCellMov;
+	xSemaphoreHandle sem_takeFromCellMov_done = takeFromCellCom_params->sem_takeFromCellMov_done;
 
 	//XZ comunication parameters 
 	xzCom_param* xzCom_params = taskStockMov_params->xzCom_params;
@@ -537,8 +554,7 @@ void takeStock(void* pvParameters) {
 		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 		//takePartFromCell();
 		xSemaphoreGive(sem_takeFromCellMov);
-		vTaskDelay(1);
-		xSemaphoreTake(sem_takeFromCellMov, portMAX_DELAY);
+		xSemaphoreTake(sem_takeFromCellMov_done, portMAX_DELAY);
 		//gotoXZ(1,1)
 		xQueueSend(mbx_xzMov, &dock, portMAX_DELAY);
 		xSemaphoreTake(sem_xzMov, portMAX_DELAY);
@@ -570,9 +586,11 @@ void myDaemonTaskStartupHook(void) {
 
 	zDownMov_param* my_zDownMov_param = (zDownMov_param*)pvPortMalloc(sizeof(zDownMov_param));
 	my_zDownMov_param->sem_zDownMov = xSemaphoreCreateCounting(1, 0);
+	my_zDownMov_param->sem_zDownMov_done = xSemaphoreCreateCounting(1, 0);
 
 	zUpMov_param* my_zUpMov_param = (zUpMov_param*)pvPortMalloc(sizeof(zUpMov_param));
 	my_zUpMov_param->sem_zUpMov = xSemaphoreCreateCounting(1, 0);
+	my_zUpMov_param->sem_zUpMov_done = xSemaphoreCreateCounting(1, 0);
 
 	xMov_param* my_xMov_param = (xMov_param*)pvPortMalloc(sizeof(xMov_param));
 	my_xMov_param->mbx_xMov = xQueueCreate(1, sizeof(int));
@@ -584,9 +602,11 @@ void myDaemonTaskStartupHook(void) {
 
 	takeFromCellCom_param* my_takeFromCellCom_param = (takeFromCellCom_param*)pvPortMalloc(sizeof(takeFromCellCom_param));
 	my_takeFromCellCom_param->sem_takeFromCellMov = xSemaphoreCreateCounting(1, 0);
+	my_takeFromCellCom_param->sem_takeFromCellMov_done = xSemaphoreCreateCounting(1, 0);
 
 	putInCellCom_param* my_putInCellCom_param = (putInCellCom_param*)pvPortMalloc(sizeof(putInCellCom_param));
 	my_putInCellCom_param->sem_putInCellMov = xSemaphoreCreateCounting(1, 0);
+	my_putInCellCom_param->sem_putInCellMov_done = xSemaphoreCreateCounting(1, 0);
 
 	addStockCom_param* my_addStockCom_param = (addStockCom_param*)pvPortMalloc(sizeof(addStockCom_param));
 	my_addStockCom_param->mbx_addStockMov = xQueueCreate(1, sizeof(Coords));
@@ -600,6 +620,7 @@ void myDaemonTaskStartupHook(void) {
 	my_taskXZ_param->xzCom_params = my_xzCom_param;
 	my_taskXZ_param->xMov_params = my_xMov_param;
 	my_taskXZ_param->zMov_params = my_zMov_param;
+	my_taskXZ_param->yMov_params = my_yMov_param;
 
 	tasksCellMov_param* my_tasksCellMov_param = (tasksCellMov_param*)pvPortMalloc(sizeof(tasksCellMov_param));
 	my_tasksCellMov_param->zUpMov_params = my_zUpMov_param;
