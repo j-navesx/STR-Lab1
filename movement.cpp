@@ -122,7 +122,7 @@ int getYPos() {
 	}
 }
 
-void gotoY(int yPos) {
+/*void gotoY(int yPos) {
 	int currPos = getYPos();
 	printf("CURRENT POS %d\n", currPos);
 	if (currPos > yPos) {
@@ -138,7 +138,7 @@ void gotoY(int yPos) {
 		}
 	}
 	printf("STOPPED AT %d\n\n", yPos);
-}
+}*/
 
 // Z movement:
 
@@ -207,7 +207,7 @@ int getZPos() {
 	printf("STOPPED AT %d\n\n", zPos);
 }*/
 
-void gotoZUp() {
+/*void gotoZUp() {
 	moveZUp();
 	while (1) {
 		uInt8 p0 = readDigitalU8(0);
@@ -217,9 +217,9 @@ void gotoZUp() {
 			break;
 		}
 	}
-}
+}*/
 
-void gotoZDown() {
+/*void gotoZDown() {
 	moveZDown();
 	while (1) {
 		uInt8 p0 = readDigitalU8(0);
@@ -229,27 +229,7 @@ void gotoZDown() {
 			break;
 		}
 	}
-}
-
-void putPartInCell() {
-	uInt8 p = readDigitalU8(1);
-	if (getBitValue(p, 4)) {
-		gotoZUp();
-		gotoY(1);
-		gotoZDown();
-		gotoY(2);
-	}
-}
-
-void takePartFromCell() {
-	uInt8 p = readDigitalU8(1);
-	if (!getBitValue(p, 4)) {
-		gotoY(1);
-		gotoZUp();
-		gotoY(2);
-		gotoZDown();
-	}
-}
+}*/
 
 // RESET:
 void resetPos() {
