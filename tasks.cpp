@@ -124,9 +124,22 @@ typedef struct {
 	StorageRequest* StorageGrid[3][3];
 }cmd_param;
 
+typedef struct {
+	xQueueHandle mbx_LeftLed;
+}LeftLed;
+
+typedef struct {
+	xQueueHandle mbx_RightLed;
+}RightLed;
+
 //MAILBOXES
 xQueueHandle mbx_keyb;
 xQueueHandle mbx_request;
+
+int led_period = 0;
+TaskHandle_t left_button_handle;
+
+#define INCLUDE_vTaskSuspend 1
 
 StorageRequest* Grid[3][3];
 
@@ -697,6 +710,96 @@ void takeStock(void* pvParameters) {
 		xSemaphoreTake(sem_yMov, portMAX_DELAY);
 
 		xSemaphoreGive(sem_takeStockMov);
+	}
+}
+
+void vTaskLeftLED(void* pvParameters) {
+	uInt8 p;
+
+	while (TRUE) {
+		while (led_period) {
+			p = readDigitalU8(2);
+			setBitValue(&p, 0, 1);
+
+			taskENTER_CRITICAL();
+			writeDigitalU8(2, p);
+			taskEXIT_CRITICAL();
+
+			Sleep(led_period);
+
+			p = readDigitalU8(2);
+			setBitValue(&p, 0, 0);
+
+			taskENTER_CRITICAL();
+			writeDigitalU8(2, p);
+			taskEXIT_CRITICAL();
+
+			Sleep(led_period);
+		}
+	}
+}
+
+void vTaskEmergencyStop(void* pvParameters) {
+	uInt8 p;
+
+	while (TRUE) {
+		//Switch 1 -> p1 xx1x xxxx
+		//Switch 2 -> p1 x1xx xxxx
+		p = readDigitalU8(1);
+		if (getBitValue(p, 5) && getBitValue(p, 6)) { // If both pressed, enter Emergency Stop
+			led_period = 500; //0.5 s period of flashing
+			uInt8 currentMovement_State = readDigitalU8(2); //save the current grid movement state
+			printf("\n\n!! Emergency Stop !!\n\n");
+
+			xTaskSuspend(left_button_handle); //stop the task that acts on left button being pressed
+			taskENTER_CRITICAL();
+			writeDigitalU8(2, 0); //stop all movement
+			taskEXIT_CRITICAL();
+
+			while (TRUE) {
+				p = readDigitalU8(1);
+				if (getBitValue(p, 5) && !getBitValue(p, 6)) {  //Pressed left button. Resume Operation.
+					printf("\nFalse Alarm. Resuming operation.\n");
+					taskENTER_CRITICAL();
+					writeDigitalU8(2, currentMovement_State); //resumes the state before forced stopped
+					taskEXIT_CRITICAL();
+					break;
+				}
+				else if (getBitValue(p, 6) && !getBitValue(p, 5)) { //Pressed right button. Reset System.
+
+					break;
+				}
+			}
+			xTaskResume(left_button_handle);
+			led_period = 0;
+		}
+	}
+}
+
+// RIGHT  0000 0010  0x2
+void vTaskRightLED(void* pvParameters) {
+	uInt8 p;
+
+	while (TRUE) {
+		while (led_period) {
+			p = readDigitalU8(2);
+			setBitValue(&p, 1, 1);
+
+			taskENTER_CRITICAL();
+			writeDigitalU8(2, p);
+			taskEXIT_CRITICAL();
+
+			Sleep(led_period);
+
+			p = readDigitalU8(2);
+			setBitValue(&p, 1, 0);
+
+			taskENTER_CRITICAL();
+			writeDigitalU8(2, p);
+			taskEXIT_CRITICAL();
+
+			Sleep(led_period);
+		}
 	}
 }
 
