@@ -20,8 +20,18 @@ using namespace std;
 #include <movement.h>
 
 typedef struct {
+	int xcord;
+	int zcord;
+}Coords;
+
+typedef struct {
+	string request;
+	Coords location;
+}ServerComms;
+
+typedef struct {
 	int reference;
-	int entryDate;
+	int entryDate;	
 	int expiration;
 }StorageRequest;
 
@@ -29,11 +39,6 @@ typedef struct {
 	xQueueHandle mbx_server;
 	int spaces_available;
 }StorageServer;
-
-typedef struct {
-	int xcord;
-	int zcord;
-}Coords;
 
 typedef struct {
 	xQueueHandle mbx_xMov;
@@ -112,15 +117,18 @@ typedef struct {
 //Task Comunication params
 typedef struct {
 	//Will expand during development
+	xQueueHandle mbx_cmd;
 	xzCom_param* xzCom_params;
 	addStockCom_param* addStockCom_params;
 	takeStockCom_param* takeStockCom_params;
+	StorageRequest* StorageGrid[3][3];
 }cmd_param;
 
 //MAILBOXES
 xQueueHandle mbx_keyb;
 xQueueHandle mbx_request;
 
+StorageRequest* Grid[3][3];
 
 void initialisePorts() {
 	//positions on the x axis (sensors on the bottom activate on passage)
@@ -138,21 +146,155 @@ void kybControl(void * pvParameters) {
 
 }
 
-void infoMenu() {
+void timePass(void* pvParameters) {
+	StorageRequest* grid[3][3];
+	int expiredFlag = 0;
 	while (true) {
-		printf("n");
+		for (int l = 0; l < 3; l++) {
+			for (int c = 0; c < 3; c++) {
+				if (grid[l][c] != NULL) {
+					if (--grid[l][c]->expiration <= 0) {
+						//Left LED
+					}
+				}
+			}
+			
+		}
+	}
+}
+
+//SetConsoleTextAttribute(hConsole, 14);
+void iListAll(StorageRequest* grid[3][3]) {
+	StorageRequest st1 = { 2,14,70 };
+	grid[0][2] = &st1;
+	while (true) {
+		system("cls");
+		cout << "\t\t\t\t|  List All Products  |\n\n\n";
+		for (int l = 0; l<3 ; l++) {
+			cout << "\t\t------|------|------\n\t\t| ";
+			for (int c = 0; c<3 ; c++) {
+				if (grid[l][c] != NULL) {
+					if (grid[l][c]->reference >= 0 && grid[l][c]->reference <= 15) {
+						if (grid[l][c]->reference < 10) {
+							cout << "0";
+						}
+						cout << grid[l][c]->reference;
+					}
+				}
+				else {
+					cout << "-1";
+				}
+				cout << "  |  ";
+			}
+			cout << "\n";
+			
+		}
+		cout << "\t\t------|------|------\n";
+
+		cout << "\n\nTo return to the Main Menu press \"e\"";
+
 		if (_kbhit()) {
 			char input = _getch();
-			printf("Number %c", input);
+			if (input == 'e') {
+				break;
+			}
+			else {
+				break;
+			}
+		}
+	}
+}
+
+void iListExp(StorageRequest* grid[3][3]) {
+
+}
+
+void iSearchProd(StorageRequest* grid[3][3]) {
+
+}
+
+void infoMenu(StorageRequest* grid[3][3]) {
+	while (true) {
+		system("cls");
+		cout << "\t\t\t\t|  INFORMATION MENU  |\n\n\n";
+		cout << "1 - List all products\n";
+		cout << "2 - List expired products\n";
+		cout << "3 - Search from reference\n";
+		cout << "e - Exit menu";
+		if (_kbhit()) {
+			char input = _getch();
+			if (input == '1') {
+				iListAll(grid);
+			}
+			if (input == '2') {
+				iListExp(grid);
+			}
+			if (input == '3') {
+				iSearchProd(grid);
+			}
+			if (input == 'e') {
+				break;
+			}
 		}
 	}
 
 }
 
-void cmd(void * pvParameters) {
+void cmdUser(void* pvParameters) {
 	
+	cmd_param* cmdUser_params = (cmd_param*)pvParameters;
+
+	xQueueHandle mbx_cmd = cmdUser_params->mbx_cmd;
+
+	StorageRequest* grid[3][3];
+	memcpy(grid, cmdUser_params->StorageGrid, sizeof(StorageRequest * [3][3]));
+
+	for (int l = 0; l < 3; l++) {
+		for (int c = 0; c < 3; c++) {
+			grid[l][c] = NULL;
+		}
+	}
+
+	string comm;
+
+	while (true) {
+		system("cls");
+		printf("\nInput your function:\n\t:");
+		if (_kbhit()) {
+			cin >> comm;
+			if (!comm.compare("help")) {
+				printf("\n\tCommands available:\n");
+				printf("-");
+			}
+			if (!comm.compare("goto")) {
+				Coords coord;
+				printf("X Coordinate:\n\t:");
+				scanf("%*c");
+				scanf("%d", &coord.xcord);
+				printf("Z Coordinate:\n\t:");
+				scanf("%d", &coord.zcord);
+				ServerComms request;
+				request.request = comm;
+				request.location = coord;
+				xQueueSend(mbx_cmd, &request, 0);
+			}
+			if (!comm.compare("info")) {
+				infoMenu(grid);
+			}
+			if (!comm.compare("exit")) {
+				exit(0);
+			}
+		}
+	}
+}
+
+void cmd(void* pvParameters) {
+
 	//cmd needed parameters 
 	cmd_param* cmd_params = (cmd_param*)pvParameters;
+
+	//cmd communication paramaters
+	xQueueHandle mbx_cmd = cmd_params->mbx_cmd;
 
 	//XZ comunication parameters 
 	xzCom_param* xzCom_params = cmd_params->xzCom_params;
@@ -169,31 +311,17 @@ void cmd(void * pvParameters) {
 	xQueueHandle mbx_takeStockMov = takeStockCom_params->mbx_takeStockMov;
 	xSemaphoreHandle sem_takeStockMov = takeStockCom_params->sem_takeStockMov;
 
+	ServerComms requestReceived;
+
+
 	while (true) {
-		
-		//system("cls");
-		string comm;
-		printf("\nInput your function:\n\t:");
-		cin >> comm;
-		if (!comm.compare("help")){
-			printf("\n\tCommands available:\n");
-			printf("-");
-		}
-		if (!comm.compare("goto")) {
-			int coords[2];
-			printf("Coords:\n\t:");
-			scanf("%*c");
-			scanf("(%d,%d)", &coords[0], &coords[1]);
-			xQueueSend(mbx_xzMov, &coords, 0);
+		xQueueReceive(mbx_cmd,&requestReceived,0);
+		if (!requestReceived.request.compare("goto")) {
+			xQueueSend(mbx_xzMov, &requestReceived.location, 0);
 			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 		}
-		if (!comm.compare("info")) {
-			infoMenu();
-		}
-		if (!comm.compare("exit")) {
-			exit(0);
-		}
 	}
+	
 }
 
 void gotoXZ(void* pvParameters) {
@@ -573,9 +701,7 @@ void takeStock(void* pvParameters) {
 }
 
 void myDaemonTaskStartupHook(void) {
-	//Grid initialization 
-	StorageRequest grid[3][3] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
-	
+
 	xzCom_param* my_xzCom_param = (xzCom_param*)pvPortMalloc(sizeof(xzCom_param));
 	my_xzCom_param->mbx_xzMov = xQueueCreate(1, sizeof(Coords));
 	my_xzCom_param->sem_xzMov = xSemaphoreCreateCounting(1, 0);
@@ -638,13 +764,16 @@ void myDaemonTaskStartupHook(void) {
 	my_taskStockMov_param->takeStockCom_params = my_takeStockCom_param;
 
 	cmd_param* my_cmd_param = (cmd_param*)pvPortMalloc(sizeof(cmd_param));
+	my_cmd_param->mbx_cmd = xQueueCreate(90,sizeof(ServerComms));
 	my_cmd_param->xzCom_params = my_xzCom_param;
 	my_cmd_param->addStockCom_params = my_addStockCom_param;
 	my_cmd_param->takeStockCom_params = my_takeStockCom_param;
 	
+	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
 	xTaskCreate(cmd, "cmd", 100, my_cmd_param, 0, NULL);
+	xTaskCreate(cmdUser, "cmdUser", 100, my_cmd_param, 0, NULL);
 	xTaskCreate(gotoXZ, "gotoXZ", 100, my_taskXZ_param, 0, NULL);
 	xTaskCreate(gotoX, "gotoX", 100, my_xMov_param, 0, NULL);
 	xTaskCreate(gotoZ, "gotoZ", 100, my_zMov_param, 0, NULL);
