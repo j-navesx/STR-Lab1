@@ -1009,6 +1009,8 @@ void StorageCalibration() {
 	uInt8 p1;
 
 	while (1) {
+		system("cls");
+		cout << "Calibrate the system manually by using the arrow keys";
 		c = 0;
 		if (_kbhit()) {
 			switch (c = _getch()) {
