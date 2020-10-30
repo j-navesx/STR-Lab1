@@ -140,6 +140,7 @@ typedef struct {
 	StorageRequest* StorageGrid[3][3];
 }cmd_param;
 
+xSemaphoreHandle sem_interruptMode;
 
 //MAILBOXES
 xQueueHandle mbx_keyb;
@@ -464,43 +465,45 @@ void cmdUser(void* pvParameters) {
 	cmdUser_params->StorageGrid[2][1]->expiration = 6;
 
 	while (true) {
-		system("cls");
-		cout << "\n\tCommands available:\n";
-		cout << "- goto\n";
-		cout << "- add\n";
-		cout << "- info\n";
-		cout << "- exit\n";
-		cout << "\nInput your function:\n\t:";
-		if (_kbhit()) {
-			cin >> comm;
-			if (!comm.compare("goto")) {
-				Coords coord = coordsInput();
-				ServerComms request;
-				request.request = "goto";
-				request.location = coord;
-				xQueueSend(mbx_cmd, &request, 0);
-			}
-			if (!comm.compare("add")) {
-				if (cmdUser_params->availableSpaces != 0) {
-					Coords coord = addMenu(cmdUser_params);
-					if (coord.xcord != NULL) {
-						ServerComms request;
-						request.request = "add";
-						request.location = coord;
-						xQueueSend(mbx_cmd, &request, 0);
-						cmdUser_params->availableSpaces--;
+		if (uxSemaphoreGetCount(sem_interruptMode) != 3) {
+			system("cls");
+			cout << "\n\tCommands available:\n";
+			cout << "- goto\n";
+			cout << "- add\n";
+			cout << "- info\n";
+			cout << "- exit\n";
+			cout << "\nInput your function:\n\t:";
+			if (_kbhit()) {
+				cin >> comm;
+				if (!comm.compare("goto")) {
+					Coords coord = coordsInput();
+					ServerComms request;
+					request.request = "goto";
+					request.location = coord;
+					xQueueSend(mbx_cmd, &request, 0);
+				}
+				if (!comm.compare("add")) {
+					if (cmdUser_params->availableSpaces != 0) {
+						Coords coord = addMenu(cmdUser_params);
+						if (coord.xcord != NULL) {
+							ServerComms request;
+							request.request = "add";
+							request.location = coord;
+							xQueueSend(mbx_cmd, &request, 0);
+							cmdUser_params->availableSpaces--;
+						}
+					}
+					else {
+						cout << "No available spaces at the moment\n";
+						Sleep(1000);
 					}
 				}
-				else {
-					cout << "No available spaces at the moment\n";
-					Sleep(1000);
+				if (!comm.compare("info")) {
+					infoMenu(cmdUser_params);
 				}
-			}
-			if (!comm.compare("info")) {
-				infoMenu(cmdUser_params);
-			}
-			if (!comm.compare("exit")) {
-				exit(0);
+				if (!comm.compare("exit")) {
+					exit(0);
+				}
 			}
 		}
 	}
@@ -578,8 +581,12 @@ void gotoXZ(void* pvParameters) {
 	xSemaphoreHandle sem_yMov = yMov_params->sem_yMov;
 
 	while (true) {
-		xQueueReceive(mbx_xzMov, &coord, portMAX_DELAY);
-		//printf("\n%d,%d\n", coords[0], coords[1]);
+		if (uxSemaphoreGetCount(sem_interruptMode) < 2) {
+			xQueueReceive(mbx_xzMov, &coord, portMAX_DELAY);
+		}
+		while (uxSemaphoreGetCount(sem_interruptMode) >= 2) {
+			taskYIELD();
+		}
 
 		if (getYPos() != 2) {
 			y = 2;
@@ -600,7 +607,9 @@ void gotoXZ(void* pvParameters) {
 		//wait for goto_z completion, synchronization
 		xSemaphoreTake(sem_zMov, portMAX_DELAY);
 
-		xSemaphoreGive(sem_xzMov);
+		if (uxSemaphoreGetCount(sem_interruptMode) < 2) {
+			xSemaphoreGive(sem_xzMov);
+		}
 	}
 }
 
@@ -622,7 +631,7 @@ void gotoX(void* pvParameters) {
 		else
 			if (crtpos > x)
 				moveXLeft();
-		while (getXPos() != x) {
+		while (getXPos() != x && uxSemaphoreGetCount(sem_interruptMode) < 2) {
 			taskYIELD();
 		}
 		stopX();
@@ -647,7 +656,7 @@ void gotoZ(void* pvParameters) {
 		else
 			if (crtpos > z)
 				moveZDown();
-		while (getZPos() != z) {
+		while (getZPos() != z && uxSemaphoreGetCount(sem_interruptMode) < 2) {
 			taskYIELD();
 		}
 		stopZ();
@@ -658,25 +667,37 @@ void gotoZ(void* pvParameters) {
 void gotoY(void* pvParameters) {
 	int y;
 	int crtpos;
+	int posSave = 2;
 
 	yMov_param* yMov_params = (yMov_param*)pvParameters;
 	xQueueHandle mbx_yMov = yMov_params->mbx_yMov;
 	xSemaphoreHandle sem_yMov = yMov_params->sem_yMov;
 
 	while (true) {
-		xQueueReceive(mbx_yMov, &y, portMAX_DELAY);
+		if (uxSemaphoreGetCount(sem_interruptMode) < 2) {
+			xQueueReceive(mbx_yMov, &y, portMAX_DELAY);
+			posSave = getYPos();
+		}
 		crtpos = getYPos();
+
+		while (uxSemaphoreGetCount(sem_interruptMode) >= 2) {
+			taskYIELD();
+			crtpos = posSave;
+		}
 
 		if (crtpos > y)
 			moveYIn();
 		else
 			if (crtpos < y)
 				moveYOut();
-		while (getYPos() != y) {
+		while (getYPos() != y && uxSemaphoreGetCount(sem_interruptMode) < 2) {
 			taskYIELD();
 		}
 		stopY();
-		xSemaphoreGive(sem_yMov);
+
+		if (uxSemaphoreGetCount(sem_interruptMode) < 2) {
+			xSemaphoreGive(sem_yMov);
+		}
 	}
 }
 
@@ -686,19 +707,26 @@ void gotoZUp(void* pvParameters) {
 	xSemaphoreHandle sem_zUpMov_done = zUpMov_params->sem_zUpMov_done;
 
 	while (1) {
-		xSemaphoreTake(sem_zUpMov, portMAX_DELAY);
+		if (uxSemaphoreGetCount(sem_interruptMode) < 2) {
+			xSemaphoreTake(sem_zUpMov, portMAX_DELAY);
+		}
+		while (uxSemaphoreGetCount(sem_interruptMode) >= 2) {
+			taskYIELD();
+		}
 		moveZUp();
 
 		uInt8 p0 = readDigitalU8(0);
 		uInt8 p1 = readDigitalU8(1);
 
-		while (getBitValue(p1, 2) && getBitValue(p1, 0) && getBitValue(p0, 6)) {
+		while (getBitValue(p1, 2) && getBitValue(p1, 0) && getBitValue(p0, 6) && uxSemaphoreGetCount(sem_interruptMode) < 2) {
 			p0 = readDigitalU8(0);
 			p1 = readDigitalU8(1);
 			taskYIELD();
 		}
 		stopZ();
-		xSemaphoreGive(sem_zUpMov_done);
+		if (uxSemaphoreGetCount(sem_interruptMode) < 2) {
+			xSemaphoreGive(sem_zUpMov_done);
+		}
 	}
 }
 
@@ -708,19 +736,26 @@ void gotoZDown(void* pvParameters) {
 	xSemaphoreHandle sem_zDownMov_done = zDownMov_params->sem_zDownMov_done;
 
 	while (1) {
-		xSemaphoreTake(sem_zDownMov, portMAX_DELAY);
+		if (uxSemaphoreGetCount(sem_interruptMode) < 2) {
+			xSemaphoreTake(sem_zDownMov, portMAX_DELAY); 
+		}
+		while (uxSemaphoreGetCount(sem_interruptMode) >= 2) {
+			taskYIELD();
+		}
 		moveZDown();
 
 		uInt8 p0 = readDigitalU8(0);
 		uInt8 p1 = readDigitalU8(1);
 
-		while (getBitValue(p1, 3) && getBitValue(p1, 1) && getBitValue(p0, 7)) {
+		while (getBitValue(p1, 3) && getBitValue(p1, 1) && getBitValue(p0, 7) && uxSemaphoreGetCount(sem_interruptMode) < 2) {
 			p0 = readDigitalU8(0);
 			p1 = readDigitalU8(1);
 			taskYIELD();
 		}
 		stopZ();
-		xSemaphoreGive(sem_zDownMov_done);
+		if (uxSemaphoreGetCount(sem_interruptMode) < 2) {
+			xSemaphoreGive(sem_zDownMov_done);
+		}
 	}
 }
 
@@ -928,7 +963,7 @@ void takeStock(void* pvParameters) {
 	}
 }
 
-/*void vTaskLeftLED(void* pvParameters) {
+void vTaskLeftLED(void* pvParameters) {
 	uInt8 p;
 	int time_flag=0;
 
@@ -1003,7 +1038,7 @@ void vTaskRightLED(void* pvParameters) {
 	}
 }
 
-void vTaskEmergencyStop(void* pvParameters) {
+/*void vTaskEmergencyStop(void* pvParameters) {
 	uInt8 p;
 
 	emergency_param* emergency_params = (emergency_param*)pvParameters;
@@ -1129,6 +1164,55 @@ void StorageCalibration() {
 	}
 }
 
+void switch2_rising_isr(ULONGLONG lastTime) {
+	xSemaphoreGive(sem_interruptMode);
+}
+
+void switch1_rising_isr(ULONGLONG lastTime) {
+	xSemaphoreGive(sem_interruptMode);
+}
+
+void switch2_falling_isr(ULONGLONG lastTime) {
+	
+	if (uxSemaphoreGetCount(sem_interruptMode) == 1) {
+		//nothing
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+	}
+	else if (uxSemaphoreGetCount(sem_interruptMode) == 2) {
+		//Emergency Stop
+	}
+	else if (uxSemaphoreGetCount(sem_interruptMode) == 3) {
+		//reset
+		StorageCalibration();
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+	}
+	else if (uxSemaphoreGetCount(sem_interruptMode) == 4) {
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+	}
+}
+
+void switch1_falling_isr(ULONGLONG lastTime) {
+	
+	if (uxSemaphoreGetCount(sem_interruptMode) == 1) {
+		//Take expired products from cells
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+		printf("\nTake expired products from cells\n");
+	}
+	else if (uxSemaphoreGetCount(sem_interruptMode) == 3) {
+		//resume
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+	}
+	else if (uxSemaphoreGetCount(sem_interruptMode) == 4) {
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+		xSemaphoreTake(sem_interruptMode, portMAX_DELAY);
+	}
+}
+
 void myDaemonTaskStartupHook(void) {
 	StorageRequest nullItem = { NULL };
 	StorageRequest MasterGrid[3][3];
@@ -1137,6 +1221,8 @@ void myDaemonTaskStartupHook(void) {
 			MasterGrid[c][l] = nullItem;
 		}
 	}
+
+	sem_interruptMode= xSemaphoreCreateCounting(4, 0);
 
 	xzCom_param* my_xzCom_param = (xzCom_param*)pvPortMalloc(sizeof(xzCom_param));
 	my_xzCom_param->mbx_xzMov = xQueueCreate(1, sizeof(Coords));
@@ -1240,10 +1326,15 @@ void myDaemonTaskStartupHook(void) {
 	xTaskCreate(putPartInCell, "putPartInCell", 100, my_tasksCellMov_param, 0, NULL);
 	xTaskCreate(addStock, "addStock", 100, my_taskStockMov_param, 0, NULL);
 	xTaskCreate(takeStock, "takeStock", 100, my_taskStockMov_param, 0, NULL);
-	//xTaskCreate(vTaskRightLED, "vTaskRightLED", 100, my_RightLed_param, 0, NULL);
-	//xTaskCreate(vTaskLeftLED, "vTaskLeftLED", 100, my_LeftLed_param, 0, NULL);
+	xTaskCreate(vTaskRightLED, "vTaskRightLED", 100, my_RightLed_param, 0, NULL);
+	xTaskCreate(vTaskLeftLED, "vTaskLeftLED", 100, my_LeftLed_param, 0, NULL);
 	//xTaskCreate(vTaskEmergencyStop, "vTaskEmergencyStop", 100, my_emergency_param, 0, NULL);
 	xTaskCreate(timePass, "timePass", 100, my_cmd_param, 0, NULL);
+
+	attachInterrupt(1, 6, switch2_rising_isr, RISING);
+	attachInterrupt(1, 5, switch1_rising_isr, RISING);
+	attachInterrupt(1, 6, switch2_falling_isr, FALLING);
+	attachInterrupt(1, 5, switch1_falling_isr, FALLING);
 
 	initialisePorts();
 	StorageCalibration();
