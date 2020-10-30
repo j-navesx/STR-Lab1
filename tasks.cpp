@@ -36,11 +36,6 @@ typedef struct {
 	int expiration;
 }StorageRequest;
 
-//typedef struct {
-//	xQueueHandle mbx_server;
-//	int spaces_available;
-//}StorageServer;
-
 typedef struct {
 	xQueueHandle mbx_xMov;
 	xSemaphoreHandle sem_xMov;
@@ -169,7 +164,6 @@ void timePass(void* pvParameters) {
 	emergency_param* emergencyStop_params = timePass_params->emergencyStop_params;
 	LeftLed* LeftLed_params = emergencyStop_params->LeftLed_param;
 	xQueueHandle mbx_LeftLed = LeftLed_params->mbx_LeftLed;
-	int expiredFlag = timePass_params->expiredFlag; //estava a dar erro por isso pus isto
 
 	time_t now = time(0);
 	tm* ltm = localtime(&now);
@@ -185,7 +179,7 @@ void timePass(void* pvParameters) {
 					if (timePass_params->StorageGrid[c][l]->reference != NULL) {
 						if (--timePass_params->StorageGrid[c][l]->expiration <= 0) {
 							xQueueSend(mbx_LeftLed, &activate, 0);
-							expiredFlag = 1;
+							timePass_params->expiredFlag = 1;
 						}
 					}
 				}
@@ -398,9 +392,10 @@ Coords coordsInput() {
 }
 
 Coords addMenu(cmd_param* grid) {
-	Coords coord; //estava a dar erro por isso pus aqui
+	Coords coord;
 	int cancel = -2;
 	while (cancel == -2) {
+		system("cls");
 		cout << "Select position or closest to (1,1)?\n";
 		cout << "- Select Pos (s)\n";
 		cout << "- Closest to (1,1) (c)\n";
@@ -1049,12 +1044,12 @@ void takeExpired(void* pvParameters) {
 				for (int l = 0; l < 3; l++) {
 					if (takeExpired_params->StorageGrid[c][l]->reference != NULL) {
 						if (takeExpired_params->StorageGrid[c][l]->expiration <= 0) {
-							aux.xcord = c;
-							aux.zcord = l;
-							ServerComms auxComm;
-							auxComm.location = aux;
-							auxComm.request = "take";
-							xQueueSend(takeExpired_params->mbx_cmd, &auxComm, 0);
+							aux.xcord = c + 1;
+							aux.zcord = l + 1;
+							ServerComms request;
+							request.request = "take";
+							request.location = aux;
+							xQueueSend(takeExpired_params->mbx_cmd, &request, 0);
 						}
 					}
 				}
@@ -1066,6 +1061,7 @@ void takeExpired(void* pvParameters) {
 void vTaskLeftLED(void* pvParameters) {
 	uInt8 p;
 	int time_flag = 0;
+	int time_flag_save = time_flag;
 
 	LeftLed* LeftLed_param = (LeftLed*)pvParameters;
 	xQueueHandle mbx_LeftLed = LeftLed_param->mbx_LeftLed;
@@ -1073,6 +1069,13 @@ void vTaskLeftLED(void* pvParameters) {
 	while (TRUE) {
 		if (uxQueueMessagesWaiting(mbx_LeftLed)) {
 			xQueueReceive(mbx_LeftLed, &time_flag, 0);
+			time_flag_save = time_flag;
+		}
+		if (uxSemaphoreGetCount(sem_interruptMode) >= 2) {
+			time_flag = 1;
+		}
+		else {
+			time_flag = time_flag_save;
 		}
 		if (time_flag) {
 			p = readDigitalU8(2);
@@ -1084,7 +1087,7 @@ void vTaskLeftLED(void* pvParameters) {
 			writeDigitalU8(2, p);
 			taskEXIT_CRITICAL();
 
-			Sleep(LED_PERIOD);
+			Sleep(LED_PERIOD* time_flag);
 
 			p = readDigitalU8(2);
 			taskENTER_CRITICAL();
@@ -1095,7 +1098,7 @@ void vTaskLeftLED(void* pvParameters) {
 			writeDigitalU8(2, p);
 			taskEXIT_CRITICAL();
 
-			Sleep(LED_PERIOD);
+			Sleep(LED_PERIOD * time_flag);
 		}
 	}
 }
@@ -1104,6 +1107,7 @@ void vTaskLeftLED(void* pvParameters) {
 void vTaskRightLED(void* pvParameters) {
 	uInt8 p;
 	int time_flag = 0;
+	int time_flag_save = time_flag;
 
 	RightLed* RightLed_param = (RightLed*)pvParameters;
 	xQueueHandle mbx_RightLed = RightLed_param->mbx_RightLed;
@@ -1111,6 +1115,13 @@ void vTaskRightLED(void* pvParameters) {
 	while (TRUE) {
 		if (uxQueueMessagesWaiting(mbx_RightLed)) {
 			xQueueReceive(mbx_RightLed, &time_flag, 0);
+			time_flag_save = time_flag;
+		}
+		if (uxSemaphoreGetCount(sem_interruptMode) >= 2) {
+			time_flag = 1;
+		}
+		else {
+			time_flag = time_flag_save;
 		}
 		if (time_flag) {
 			p = readDigitalU8(2);
@@ -1122,7 +1133,7 @@ void vTaskRightLED(void* pvParameters) {
 			writeDigitalU8(2, p);
 			taskEXIT_CRITICAL();
 
-			Sleep(LED_PERIOD);
+			Sleep(LED_PERIOD * time_flag);
 
 			p = readDigitalU8(2);
 			taskENTER_CRITICAL();
@@ -1133,7 +1144,7 @@ void vTaskRightLED(void* pvParameters) {
 			writeDigitalU8(2, p);
 			taskEXIT_CRITICAL();
 
-			Sleep(LED_PERIOD);
+			Sleep(LED_PERIOD * time_flag);
 		}
 	}
 }
