@@ -400,6 +400,7 @@ Coords addMenu(cmd_param* grid) {
 	Coords coord;
 	int cancel = -2;
 	while (cancel == -2) {
+		system("cls");
 		cout << "Select position or closest to (1,1)?\n";
 		cout << "- Select Pos (s)\n";
 		cout << "- Closest to (1,1) (c)\n";
