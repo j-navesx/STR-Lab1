@@ -539,6 +539,7 @@ void cmd(void* pvParameters) {
 		}
 		if (!requestReceived.request.compare("add")) {
 			xQueueSend(mbx_addStockMov, &requestReceived.location, 0);
+			xSemaphoreTake(sem_addStockMov, portMAX_DELAY);
 			//move to Pos
 			//put box in place
 		}
@@ -821,7 +822,7 @@ void takePartFromCell(void* pvParameters) {
 
 void addStock(void* pvParameters) {
 	int y;
-	int user[2];
+	Coords user;
 	int dock[2] = { 1, 1 };
 
 	//addStock needed parameters 
