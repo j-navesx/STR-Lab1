@@ -3,6 +3,7 @@
 #include<stdlib.h>
 #include<string>
 #include<cstring>
+#include <ctime>
 #include <windows.h> //for Sleep function
 extern "C" {
 #include <interface.h>
@@ -31,14 +32,14 @@ typedef struct {
 
 typedef struct {
 	int reference;
-	int entryDate;	
+	string name;
 	int expiration;
 }StorageRequest;
 
-typedef struct {
-	xQueueHandle mbx_server;
-	int spaces_available;
-}StorageServer;
+//typedef struct {
+//	xQueueHandle mbx_server;
+//	int spaces_available;
+//}StorageServer;
 
 typedef struct {
 	xQueueHandle mbx_xMov;
@@ -117,6 +118,7 @@ typedef struct {
 //Task Comunication params
 typedef struct {
 	//Will expand during development
+	int availableSpaces;
 	xQueueHandle mbx_cmd;
 	xzCom_param* xzCom_params;
 	addStockCom_param* addStockCom_params;
@@ -141,8 +143,6 @@ TaskHandle_t left_button_handle;
 
 #define INCLUDE_vTaskSuspend 1
 
-StorageRequest* Grid[3][3];
-
 void initialisePorts() {
 	//positions on the x axis (sensors on the bottom activate on passage)
 	createDigitalInput(0);
@@ -155,44 +155,46 @@ void initialisePorts() {
 	resetPos();
 }
 
-void kybControl(void * pvParameters) {
-
-}
-
 void timePass(void* pvParameters) {
 	StorageRequest* grid[3][3];
+	time_t now = time(0);
+	tm* ltm = localtime(&now);
+	int second = ltm->tm_sec;
 	int expiredFlag = 0;
 	while (true) {
-		for (int l = 0; l < 3; l++) {
+		time_t now = time(0);
+		tm* ltm = localtime(&now);
+		if (ltm->tm_sec != second) {
+			second = ltm->tm_sec;
 			for (int c = 0; c < 3; c++) {
-				if (grid[l][c] != NULL) {
-					if (--grid[l][c]->expiration <= 0) {
-						//Left LED
+				for (int l = 0; l < 3; l++) {
+					if (grid[c][l] != NULL) {
+						if (--grid[c][l]->expiration <= 0) {
+							//Left LED
+						}
 					}
 				}
+
 			}
-			
 		}
 	}
 }
 
 //SetConsoleTextAttribute(hConsole, 14);
 void iListAll(StorageRequest* grid[3][3]) {
-	StorageRequest st1 = { 2,14,70 };
+	StorageRequest st1 = { 2,"Test",70 };
 	grid[0][2] = &st1;
 	while (true) {
 		system("cls");
 		cout << "\t\t\t\t|  List All Products  |\n\n\n";
-		for (int l = 0; l<3 ; l++) {
+		for (int c = 0; c < 3; c++) {
 			cout << "\t\t------|------|------\n\t\t| ";
-			for (int c = 0; c<3 ; c++) {
-				if (grid[l][c] != NULL) {
-					if (grid[l][c]->reference >= 0 && grid[l][c]->reference <= 15) {
-						if (grid[l][c]->reference < 10) {
-							cout << "0";
-						}
-						cout << grid[l][c]->reference;
+			for (int l = 0; l < 3; l++) {
+				if (grid[c][l] != NULL) {
+					if (grid[c][l]->reference < 10) {
+						cout << "0";
 					}
+					cout << grid[c][l]->reference;
 				}
 				else {
 					cout << "-1";
@@ -200,9 +202,30 @@ void iListAll(StorageRequest* grid[3][3]) {
 				cout << "  |  ";
 			}
 			cout << "\n";
-			
+
 		}
 		cout << "\t\t------|------|------\n";
+
+		cout << "\nREFERENCE-NAME-COORDINATES-EXPIRATION DATE\n\n";
+		for (int c = 0; c < 3; c++) {
+			for (int l = 0; l < 3; l++) {
+				if (grid[c][l] != NULL) {
+					if (grid[c][l]->reference < 10) {
+						cout << "0";
+					}
+					cout << grid[c][l]->reference;
+					cout << "-";
+					cout << grid[c][l]->name;
+					cout << "-";
+					printf("(%d,%d)", c, l);
+					cout << "-";
+					cout << grid[c][l]->expiration;
+					cout << "\n";
+				}
+			}
+			
+
+		}
 
 		cout << "\n\nTo return to the Main Menu press \"e\"";
 
@@ -219,7 +242,65 @@ void iListAll(StorageRequest* grid[3][3]) {
 }
 
 void iListExp(StorageRequest* grid[3][3]) {
+	while (true) {
+		system("cls");
+		cout << "\t\t\t\t|  List Expired Products  |\n\n\n";
+		for (int c = 0; c < 3; c++) {
+			cout << "\t\t------|------|------\n\t\t| ";
+			for (int l = 0; l < 3; l++) {
+				if (grid[c][l] != NULL) {
+					if (grid[c][l]->expiration <= 0) {
+						if (grid[c][l]->reference < 10) {
+							cout << "0";
+						}
+						cout << grid[c][l]->reference;
+					}
+				}
+				else {
+					cout << "-1";
+				}
+				cout << "  |  ";
+			}
+			cout << "\n";
 
+		}
+		cout << "\t\t------|------|------\n";
+
+		cout << "\nREFERENCE-NAME-COORDINATES-EXPIRATION DATE\n\n";
+		for (int c = 0; c < 3; c++) {
+			for (int l = 0; l < 3; l++) {
+				if (grid[c][l] != NULL) {
+					if (grid[c][l]->expiration <= 0) {
+						if (grid[c][l]->reference < 10) {
+							cout << "0";
+						}
+						cout << grid[c][l]->reference;
+						cout << "-";
+						cout << grid[c][l]->name;
+						cout << "-";
+						printf("(%d,%d)", c, l);
+						cout << "-";
+						cout << grid[c][l]->expiration;
+						cout << "\n";
+					}
+				}
+			}
+
+
+		}
+
+		cout << "\n\nTo return to the Main Menu press \"e\"";
+
+		if (_kbhit()) {
+			char input = _getch();
+			if (input == 'e') {
+				break;
+			}
+			else {
+				break;
+			}
+		}
+	}
 }
 
 void iSearchProd(StorageRequest* grid[3][3]) {
@@ -253,8 +334,71 @@ void infoMenu(StorageRequest* grid[3][3]) {
 
 }
 
+Coords coordsInput() {
+	system("cls");
+	Coords coord;
+	cout << "X Coordinate:\n\t:";
+	scanf("%*c");
+	scanf("%d", &coord.xcord);
+	cout << "Z Coordinate:\n\t:";
+	scanf("%d", &coord.zcord);
+	return coord;
+}
+
+Coords addMenu(StorageRequest* grid[3][3]) {
+	int cancel = -1;
+	Coords coord = coordsInput();
+	while (cancel == -1) {
+		if (grid[coord.xcord][coord.zcord] != NULL) {
+			cancel = -1;
+			cout << "Grid space already occupied\n";
+			cout << "- Try again (press anything)\n";
+			cout << "- Exit (e)";
+			char input = _getch();
+			if (input == 'e') {
+				cancel = 0;
+				break;
+			}
+			else {
+				coord = coordsInput();
+			}
+		}
+		else {
+			cancel = 1;
+		}
+	}
+	if (cancel) {
+		system("cls");
+		StorageRequest* newItem = (StorageRequest*) malloc(sizeof(StorageRequest));
+		newItem->reference = -1;
+		newItem->name = "";
+		newItem->expiration = -1;
+		int ref;
+		while (newItem->reference == -1) {
+			cout << "Insert Reference [1..15]:\n\t:";
+			scanf("%d", &ref);
+			if (ref >= 1 && ref <= 15) {
+				newItem->reference = ref;
+			}
+			else {
+				cout << "Invalid Reference: Insert a Reference between 1 and 15\n";
+			}
+		}
+		cout << "Insert Name of the Product:\n\t:";
+		cin >> newItem->name;
+
+		cout << "Insert expiration:\n\t:";
+		scanf("%d", &newItem->expiration);
+
+		grid[coord.xcord][coord.zcord] = newItem;
+		return coord;
+	}
+	Coords nullItem = {NULL,NULL};
+	return nullItem;
+}
+
 void cmdUser(void* pvParameters) {
-	
+
 	cmd_param* cmdUser_params = (cmd_param*)pvParameters;
 
 	xQueueHandle mbx_cmd = cmdUser_params->mbx_cmd;
@@ -262,9 +406,9 @@ void cmdUser(void* pvParameters) {
 	StorageRequest* grid[3][3];
 	memcpy(grid, cmdUser_params->StorageGrid, sizeof(StorageRequest * [3][3]));
 
-	for (int l = 0; l < 3; l++) {
-		for (int c = 0; c < 3; c++) {
-			grid[l][c] = NULL;
+	for (int c = 0; c < 3; c++) {
+		for (int l = 0; l < 3; l++) {
+			grid[c][l] = NULL;
 		}
 	}
 
@@ -272,24 +416,36 @@ void cmdUser(void* pvParameters) {
 
 	while (true) {
 		system("cls");
-		printf("\nInput your function:\n\t:");
+		cout << "\n\tCommands available:\n";
+		cout << "- goto\n";
+		cout << "- add\n";
+		cout << "- info\n";
+		cout << "- exit\n";
+		cout << "\nInput your function:\n\t:";
 		if (_kbhit()) {
 			cin >> comm;
-			if (!comm.compare("help")) {
-				printf("\n\tCommands available:\n");
-				printf("-");
-			}
 			if (!comm.compare("goto")) {
-				Coords coord;
-				printf("X Coordinate:\n\t:");
-				scanf("%*c");
-				scanf("%d", &coord.xcord);
-				printf("Z Coordinate:\n\t:");
-				scanf("%d", &coord.zcord);
+				Coords coord = coordsInput();
 				ServerComms request;
-				request.request = comm;
+				request.request = "goto";
 				request.location = coord;
 				xQueueSend(mbx_cmd, &request, 0);
+			}
+			if (!comm.compare("add")) {
+				if (cmdUser_params->availableSpaces != 0) {
+					Coords coord = addMenu(grid);
+					if (coord.xcord != NULL) {
+						ServerComms request;
+						request.request = "add";
+						request.location = coord;
+						xQueueSend(mbx_cmd, &request, 0);
+						cmdUser_params->availableSpaces--;
+					}
+				}
+				else {
+					cout << "No available spaces at the moment\n";
+					Sleep(1000);
+				}
 			}
 			if (!comm.compare("info")) {
 				infoMenu(grid);
@@ -326,15 +482,18 @@ void cmd(void* pvParameters) {
 
 	ServerComms requestReceived;
 
-
 	while (true) {
-		xQueueReceive(mbx_cmd,&requestReceived,0);
+		xQueueReceive(mbx_cmd, &requestReceived, 0);
 		if (!requestReceived.request.compare("goto")) {
 			xQueueSend(mbx_xzMov, &requestReceived.location, 0);
 			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 		}
+		if (!requestReceived.request.compare("add")) {
+			//move to Pos
+			//put box in place
+		}
 	}
-	
+
 }
 
 void gotoXZ(void* pvParameters) {
@@ -751,7 +910,7 @@ void vTaskEmergencyStop(void* pvParameters) {
 			uInt8 currentMovement_State = readDigitalU8(2); //save the current grid movement state
 			printf("\n\n!! Emergency Stop !!\n\n");
 
-			xTaskSuspend(left_button_handle); //stop the task that acts on left button being pressed
+			vTaskSuspend(left_button_handle); //stop the task that acts on left button being pressed
 			taskENTER_CRITICAL();
 			writeDigitalU8(2, 0); //stop all movement
 			taskEXIT_CRITICAL();
@@ -770,7 +929,7 @@ void vTaskEmergencyStop(void* pvParameters) {
 					break;
 				}
 			}
-			xTaskResume(left_button_handle);
+			vTaskResume(left_button_handle);
 			led_period = 0;
 		}
 	}
@@ -871,6 +1030,7 @@ void myDaemonTaskStartupHook(void) {
 	my_cmd_param->xzCom_params = my_xzCom_param;
 	my_cmd_param->addStockCom_params = my_addStockCom_param;
 	my_cmd_param->takeStockCom_params = my_takeStockCom_param;
+	my_cmd_param->availableSpaces = 9;
 	
 	
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
