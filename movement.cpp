@@ -86,24 +86,30 @@ int getXPos() {
 // Y movement:
 
 void moveYIn() {
+	taskENTER_CRITICAL();
 	uInt8 p = readDigitalU8(2); //read port 2
 	setBitValue(&p, 4, 0); // set bit 4 to low level
 	setBitValue(&p, 5, 1); //set bit 5 to high level
 	writeDigitalU8(2, p); //update port 2
+	taskEXIT_CRITICAL();
 }
 
 void moveYOut() {
+	taskENTER_CRITICAL();
 	uInt8 p = readDigitalU8(2); // read port 2
 	setBitValue(&p, 4, 1); // set bit 4 to high level
 	setBitValue(&p, 5, 0); //set bit 5 to low level
 	writeDigitalU8(2, p); // update port 2
+	taskEXIT_CRITICAL();
 }
 
 void stopY() {
+	taskENTER_CRITICAL();
 	uInt8 p = readDigitalU8(2); //read port 2
 	setBitValue(&p, 4, 0); // set bit 4 to low level
 	setBitValue(&p, 5, 0); //set bit 5 to low level
 	writeDigitalU8(2, p); //update port 2
+	taskEXIT_CRITICAL();
 }
 
 int getYPos() {

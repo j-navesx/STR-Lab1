@@ -532,7 +532,7 @@ void cmd(void* pvParameters) {
 	ServerComms requestReceived;
 
 	while (true) {
-		xQueueReceive(mbx_cmd, &requestReceived, 0);
+		xQueueReceive(mbx_cmd, &requestReceived, portMAX_DELAY);
 		if (!requestReceived.request.compare("goto")) {
 			xQueueSend(mbx_xzMov, &requestReceived.location, 0);
 			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
@@ -928,7 +928,7 @@ void takeStock(void* pvParameters) {
 	}
 }
 
-void vTaskLeftLED(void* pvParameters) {
+/*void vTaskLeftLED(void* pvParameters) {
 	uInt8 p;
 	int time_flag=0;
 
@@ -941,7 +941,9 @@ void vTaskLeftLED(void* pvParameters) {
 		}
 		if(time_flag){
 			p = readDigitalU8(2);
+			taskENTER_CRITICAL();
 			setBitValue(&p, 0, 1);
+			taskEXIT_CRITICAL();
 
 			taskENTER_CRITICAL();
 			writeDigitalU8(2, p);
@@ -950,7 +952,9 @@ void vTaskLeftLED(void* pvParameters) {
 			Sleep(LED_PERIOD);
 
 			p = readDigitalU8(2);
+			taskENTER_CRITICAL();
 			setBitValue(&p, 0, 0);
+			taskEXIT_CRITICAL();
 
 			taskENTER_CRITICAL();
 			writeDigitalU8(2, p);
@@ -975,7 +979,9 @@ void vTaskRightLED(void* pvParameters) {
 		}
 		if (time_flag) {
 			p = readDigitalU8(2);
+			taskENTER_CRITICAL();
 			setBitValue(&p, 1, 1);
+			taskEXIT_CRITICAL();
 
 			taskENTER_CRITICAL();
 			writeDigitalU8(2, p);
@@ -984,7 +990,9 @@ void vTaskRightLED(void* pvParameters) {
 			Sleep(LED_PERIOD);
 
 			p = readDigitalU8(2);
+			taskENTER_CRITICAL();
 			setBitValue(&p, 1, 0);
+			taskEXIT_CRITICAL();
 
 			taskENTER_CRITICAL();
 			writeDigitalU8(2, p);
@@ -1044,7 +1052,7 @@ void vTaskEmergencyStop(void* pvParameters) {
 			xQueueSend(mbx_LeftLed, &time_flag, portMAX_DELAY);
 		}
 	}
-}
+}*/
 
 void StorageCalibration() {
 	int c;
@@ -1052,7 +1060,7 @@ void StorageCalibration() {
 	uInt8 p0;
 	uInt8 p1;
 
-	while (1) {
+	while (x != 1 || z != 1) {
 		system("cls");
 		cout << "Calibrate the system manually by using the arrow keys";
 		c = 0;
@@ -1117,9 +1125,6 @@ void StorageCalibration() {
 				}
 				break;
 			}
-		}
-		if (x == 1 && z == 1) {
-			break;
 		}
 	}
 }
@@ -1235,9 +1240,9 @@ void myDaemonTaskStartupHook(void) {
 	xTaskCreate(putPartInCell, "putPartInCell", 100, my_tasksCellMov_param, 0, NULL);
 	xTaskCreate(addStock, "addStock", 100, my_taskStockMov_param, 0, NULL);
 	xTaskCreate(takeStock, "takeStock", 100, my_taskStockMov_param, 0, NULL);
-	xTaskCreate(vTaskRightLED, "vTaskRightLED", 100, my_RightLed_param, 0, NULL);
-	xTaskCreate(vTaskLeftLED, "vTaskLeftLED", 100, my_LeftLed_param, 0, NULL);
-	xTaskCreate(vTaskEmergencyStop, "vTaskEmergencyStop", 100, my_emergency_param, 0, NULL);
+	//xTaskCreate(vTaskRightLED, "vTaskRightLED", 100, my_RightLed_param, 0, NULL);
+	//xTaskCreate(vTaskLeftLED, "vTaskLeftLED", 100, my_LeftLed_param, 0, NULL);
+	//xTaskCreate(vTaskEmergencyStop, "vTaskEmergencyStop", 100, my_emergency_param, 0, NULL);
 	xTaskCreate(timePass, "timePass", 100, my_cmd_param, 0, NULL);
 
 	initialisePorts();
