@@ -134,14 +134,19 @@ typedef struct {
 	xQueueHandle mbx_RightLed;
 }RightLed;
 
+typedef struct {
+	LeftLed* LeftLed_param;
+	RightLed* RightLed_param;
+}emergency_param;
+
 //MAILBOXES
 xQueueHandle mbx_keyb;
 xQueueHandle mbx_request;
 
-int led_period = 0;
 TaskHandle_t left_button_handle;
 
 #define INCLUDE_vTaskSuspend 1
+#define LED_PERIOD 500
 
 void initialisePorts() {
 	//positions on the x axis (sensors on the bottom activate on passage)
@@ -874,9 +879,16 @@ void takeStock(void* pvParameters) {
 
 void vTaskLeftLED(void* pvParameters) {
 	uInt8 p;
+	int time_flag;
+
+	LeftLed* LeftLed_param = (LeftLed*)pvParameters;
+	xQueueHandle mbx_LeftLed = LeftLed_param->mbx_LeftLed;
 
 	while (TRUE) {
-		while (led_period) {
+		if (uxQueueMessagesWaiting(mbx_LeftLed)) {
+			xQueueReceive(mbx_LeftLed, &time_flag, 0);
+		}
+		if(time_flag){
 			p = readDigitalU8(2);
 			setBitValue(&p, 0, 1);
 
@@ -884,7 +896,7 @@ void vTaskLeftLED(void* pvParameters) {
 			writeDigitalU8(2, p);
 			taskEXIT_CRITICAL();
 
-			Sleep(led_period);
+			Sleep(LED_PERIOD);
 
 			p = readDigitalU8(2);
 			setBitValue(&p, 0, 0);
@@ -893,7 +905,41 @@ void vTaskLeftLED(void* pvParameters) {
 			writeDigitalU8(2, p);
 			taskEXIT_CRITICAL();
 
-			Sleep(led_period);
+			Sleep(LED_PERIOD);
+		}
+	}
+}
+
+// RIGHT  0000 0010  0x2
+void vTaskRightLED(void* pvParameters) {
+	uInt8 p;
+	int time_flag;
+
+	RightLed* RightLed_param = (RightLed*)pvParameters;
+	xQueueHandle mbx_RightLed = RightLed_param->mbx_RightLed;
+
+	while (TRUE) {
+		if (uxQueueMessagesWaiting(mbx_RightLed)) {
+			xQueueReceive(mbx_RightLed, &time_flag, 0);
+		}
+		if (time_flag) {
+			p = readDigitalU8(2);
+			setBitValue(&p, 1, 1);
+
+			taskENTER_CRITICAL();
+			writeDigitalU8(2, p);
+			taskEXIT_CRITICAL();
+
+			Sleep(LED_PERIOD);
+
+			p = readDigitalU8(2);
+			setBitValue(&p, 1, 0);
+
+			taskENTER_CRITICAL();
+			writeDigitalU8(2, p);
+			taskEXIT_CRITICAL();
+
+			Sleep(LED_PERIOD);
 		}
 	}
 }
@@ -901,16 +947,27 @@ void vTaskLeftLED(void* pvParameters) {
 void vTaskEmergencyStop(void* pvParameters) {
 	uInt8 p;
 
+	emergency_param* emergency_params = (emergency_param*)pvParameters;
+	RightLed* RightLed_param = emergency_params->RightLed_param;
+	LeftLed* LeftLed_param = emergency_params->LeftLed_param;
+
+	xQueueHandle mbx_RightLed = RightLed_param->mbx_RightLed;
+	xQueueHandle mbx_LeftLed = LeftLed_param->mbx_LeftLed;
+	int time_flag;
+
 	while (TRUE) {
 		//Switch 1 -> p1 xx1x xxxx
 		//Switch 2 -> p1 x1xx xxxx
 		p = readDigitalU8(1);
 		if (getBitValue(p, 5) && getBitValue(p, 6)) { // If both pressed, enter Emergency Stop
-			led_period = 500; //0.5 s period of flashing
 			uInt8 currentMovement_State = readDigitalU8(2); //save the current grid movement state
 			printf("\n\n!! Emergency Stop !!\n\n");
 
-			vTaskSuspend(left_button_handle); //stop the task that acts on left button being pressed
+			time_flag = 1;
+			xQueueSend(mbx_RightLed, &time_flag, portMAX_DELAY);
+			xQueueSend(mbx_LeftLed, &time_flag, portMAX_DELAY);
+
+			vTaskSuspend(left_button_handle); //Depende de como a FR7 for feita
 			taskENTER_CRITICAL();
 			writeDigitalU8(2, 0); //stop all movement
 			taskEXIT_CRITICAL();
@@ -929,35 +986,11 @@ void vTaskEmergencyStop(void* pvParameters) {
 					break;
 				}
 			}
-			vTaskResume(left_button_handle);
-			led_period = 0;
-		}
-	}
-}
 
-// RIGHT  0000 0010  0x2
-void vTaskRightLED(void* pvParameters) {
-	uInt8 p;
-
-	while (TRUE) {
-		while (led_period) {
-			p = readDigitalU8(2);
-			setBitValue(&p, 1, 1);
-
-			taskENTER_CRITICAL();
-			writeDigitalU8(2, p);
-			taskEXIT_CRITICAL();
-
-			Sleep(led_period);
-
-			p = readDigitalU8(2);
-			setBitValue(&p, 1, 0);
-
-			taskENTER_CRITICAL();
-			writeDigitalU8(2, p);
-			taskEXIT_CRITICAL();
-
-			Sleep(led_period);
+			vTaskResume(left_button_handle); // depende de como fizeres a FR7
+			time_flag = 0;
+			xQueueSend(mbx_RightLed, &time_flag, portMAX_DELAY);
+			xQueueSend(mbx_LeftLed, &time_flag, portMAX_DELAY);
 		}
 	}
 }
@@ -1031,8 +1064,17 @@ void myDaemonTaskStartupHook(void) {
 	my_cmd_param->addStockCom_params = my_addStockCom_param;
 	my_cmd_param->takeStockCom_params = my_takeStockCom_param;
 	my_cmd_param->availableSpaces = 9;
+
+	LeftLed* my_LeftLed_param = (LeftLed*)pvPortMalloc(sizeof(LeftLed));
+	my_LeftLed_param->mbx_LeftLed = xQueueCreate(1, sizeof(int));
+
+	RightLed* my_RightLed_param = (RightLed*)pvPortMalloc(sizeof(RightLed));
+	my_RightLed_param->mbx_RightLed = xQueueCreate(1, sizeof(int));
 	
-	
+	emergency_param* my_emergency_param = (emergency_param*)pvPortMalloc(sizeof(emergency_param));
+	my_emergency_param->LeftLed_param = my_LeftLed_param;
+	my_emergency_param->RightLed_param = my_RightLed_param;
+
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
 	xTaskCreate(cmd, "cmd", 100, my_cmd_param, 0, NULL);
@@ -1047,5 +1089,9 @@ void myDaemonTaskStartupHook(void) {
 	xTaskCreate(putPartInCell, "putPartInCell", 100, my_tasksCellMov_param, 0, NULL);
 	xTaskCreate(addStock, "addStock", 100, my_taskStockMov_param, 0, NULL);
 	xTaskCreate(takeStock, "takeStock", 100, my_taskStockMov_param, 0, NULL);
+	xTaskCreate(vTaskRightLED, "vTaskRightLED", 100, my_RightLed_param, 0, NULL);
+	xTaskCreate(vTaskLeftLED, "vTaskLeftLED", 100, my_LeftLed_param, 0, NULL);
+	xTaskCreate(vTaskEmergencyStop, "vTaskEmergencyStop", 100, my_emergency_param, 0, NULL);
+
 	initialisePorts();
 }
