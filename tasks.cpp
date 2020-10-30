@@ -32,7 +32,7 @@ typedef struct {
 
 typedef struct {
 	int reference;
-	string name;
+	string* name;
 	int expiration;
 }StorageRequest;
 
@@ -115,17 +115,6 @@ typedef struct {
 	yMov_param* yMov_params;
 }taskXZ_param;
 
-//Task Comunication params
-typedef struct {
-	//Will expand during development
-	int availableSpaces;
-	xQueueHandle mbx_cmd;
-	xzCom_param* xzCom_params;
-	addStockCom_param* addStockCom_params;
-	takeStockCom_param* takeStockCom_params;
-	StorageRequest* StorageGrid[3][3];
-}cmd_param;
-
 typedef struct {
 	xQueueHandle mbx_LeftLed;
 }LeftLed;
@@ -138,6 +127,19 @@ typedef struct {
 	LeftLed* LeftLed_param;
 	RightLed* RightLed_param;
 }emergency_param;
+
+//Task Comunication params
+typedef struct {
+	//Will expand during development
+	int availableSpaces;
+	xQueueHandle mbx_cmd;
+	xzCom_param* xzCom_params;
+	addStockCom_param* addStockCom_params;
+	takeStockCom_param* takeStockCom_params;
+	emergency_param* emergencyStop_params;
+	StorageRequest* StorageGrid[3][3];
+}cmd_param;
+
 
 //MAILBOXES
 xQueueHandle mbx_keyb;
@@ -157,15 +159,20 @@ void initialisePorts() {
 	createDigitalOutput(2);
 
 	writeDigitalU8(2, 0);
-	resetPos();
 }
 
 void timePass(void* pvParameters) {
-	StorageRequest* grid[3][3];
+	cmd_param* timePass_params = (cmd_param*)pvParameters;
+
+	emergency_param* emergencyStop_params = timePass_params->emergencyStop_params;
+	LeftLed* LeftLed_params = emergencyStop_params->LeftLed_param;
+	xQueueHandle mbx_LeftLed = LeftLed_params->mbx_LeftLed;
+
 	time_t now = time(0);
 	tm* ltm = localtime(&now);
 	int second = ltm->tm_sec;
 	int expiredFlag = 0;
+	int activate = 1;
 	while (true) {
 		time_t now = time(0);
 		tm* ltm = localtime(&now);
@@ -173,9 +180,9 @@ void timePass(void* pvParameters) {
 			second = ltm->tm_sec;
 			for (int c = 0; c < 3; c++) {
 				for (int l = 0; l < 3; l++) {
-					if (grid[c][l] != NULL) {
-						if (--grid[c][l]->expiration <= 0) {
-							//Left LED
+					if (timePass_params->StorageGrid[c][l]->reference != NULL) {
+						if (--timePass_params->StorageGrid[c][l]->expiration <= 0) {
+							xQueueSend(mbx_LeftLed, &activate, 0);
 						}
 					}
 				}
@@ -186,20 +193,18 @@ void timePass(void* pvParameters) {
 }
 
 //SetConsoleTextAttribute(hConsole, 14);
-void iListAll(StorageRequest* grid[3][3]) {
-	StorageRequest st1 = { 2,"Test",70 };
-	grid[0][2] = &st1;
+void iListAll(cmd_param* grid) {
 	while (true) {
 		system("cls");
 		cout << "\t\t\t\t|  List All Products  |\n\n\n";
 		for (int c = 0; c < 3; c++) {
 			cout << "\t\t------|------|------\n\t\t| ";
 			for (int l = 0; l < 3; l++) {
-				if (grid[c][l] != NULL) {
-					if (grid[c][l]->reference < 10) {
+				if (grid->StorageGrid[c][l]->reference != NULL) {
+					if (grid->StorageGrid[c][l]->reference < 10) {
 						cout << "0";
 					}
-					cout << grid[c][l]->reference;
+					cout << grid->StorageGrid[c][l]->reference;
 				}
 				else {
 					cout << "-1";
@@ -214,17 +219,17 @@ void iListAll(StorageRequest* grid[3][3]) {
 		cout << "\nREFERENCE-NAME-COORDINATES-EXPIRATION DATE\n\n";
 		for (int c = 0; c < 3; c++) {
 			for (int l = 0; l < 3; l++) {
-				if (grid[c][l] != NULL) {
-					if (grid[c][l]->reference < 10) {
+				if (grid->StorageGrid[c][l]->reference != NULL) {
+					if (grid->StorageGrid[c][l]->reference < 10) {
 						cout << "0";
 					}
-					cout << grid[c][l]->reference;
+					cout << grid->StorageGrid[c][l]->reference;
 					cout << "-";
-					cout << grid[c][l]->name;
+					cout << *grid->StorageGrid[c][l]->name;
 					cout << "-";
-					printf("(%d,%d)", c, l);
+					printf("(%d,%d)", c+1, l+1);
 					cout << "-";
-					cout << grid[c][l]->expiration;
+					cout << grid->StorageGrid[c][l]->expiration;
 					cout << "\n";
 				}
 			}
@@ -246,19 +251,19 @@ void iListAll(StorageRequest* grid[3][3]) {
 	}
 }
 
-void iListExp(StorageRequest* grid[3][3]) {
+void iListExp(cmd_param* grid) {
 	while (true) {
 		system("cls");
 		cout << "\t\t\t\t|  List Expired Products  |\n\n\n";
 		for (int c = 0; c < 3; c++) {
 			cout << "\t\t------|------|------\n\t\t| ";
 			for (int l = 0; l < 3; l++) {
-				if (grid[c][l] != NULL) {
-					if (grid[c][l]->expiration <= 0) {
-						if (grid[c][l]->reference < 10) {
+				if (grid->StorageGrid[c][l]->reference != NULL) {
+					if (grid->StorageGrid[c][l]->expiration <= 0) {
+						if (grid->StorageGrid[c][l]->reference < 10) {
 							cout << "0";
 						}
-						cout << grid[c][l]->reference;
+						cout << grid->StorageGrid[c][l]->reference;
 					}
 				}
 				else {
@@ -274,18 +279,18 @@ void iListExp(StorageRequest* grid[3][3]) {
 		cout << "\nREFERENCE-NAME-COORDINATES-EXPIRATION DATE\n\n";
 		for (int c = 0; c < 3; c++) {
 			for (int l = 0; l < 3; l++) {
-				if (grid[c][l] != NULL) {
-					if (grid[c][l]->expiration <= 0) {
-						if (grid[c][l]->reference < 10) {
+				if (grid->StorageGrid[c][l]->reference != NULL) {
+					if (grid->StorageGrid[c][l]->expiration <= 0) {
+						if (grid->StorageGrid[c][l]->reference < 10) {
 							cout << "0";
 						}
-						cout << grid[c][l]->reference;
+						cout << grid->StorageGrid[c][l]->reference;
 						cout << "-";
-						cout << grid[c][l]->name;
+						cout << *grid->StorageGrid[c][l]->name;
 						cout << "-";
 						printf("(%d,%d)", c, l);
 						cout << "-";
-						cout << grid[c][l]->expiration;
+						cout << grid->StorageGrid[c][l]->expiration;
 						cout << "\n";
 					}
 				}
@@ -308,11 +313,12 @@ void iListExp(StorageRequest* grid[3][3]) {
 	}
 }
 
-void iSearchProd(StorageRequest* grid[3][3]) {
-
+void iSearchProd(cmd_param* grid) {
+	
 }
 
-void infoMenu(StorageRequest* grid[3][3]) {
+void infoMenu(cmd_param* grid) {
+	
 	while (true) {
 		system("cls");
 		cout << "\t\t\t\t|  INFORMATION MENU  |\n\n\n";
@@ -345,16 +351,19 @@ Coords coordsInput() {
 	cout << "X Coordinate:\n\t:";
 	scanf("%*c");
 	scanf("%d", &coord.xcord);
+	coord.xcord--;
 	cout << "Z Coordinate:\n\t:";
 	scanf("%d", &coord.zcord);
+	coord.zcord--;
 	return coord;
 }
 
-Coords addMenu(StorageRequest* grid[3][3]) {
+Coords addMenu(cmd_param* grid) {
 	int cancel = -1;
 	Coords coord = coordsInput();
 	while (cancel == -1) {
-		if (grid[coord.xcord][coord.zcord] != NULL) {
+		cout << grid->StorageGrid[coord.xcord][coord.zcord]->reference;
+		if (grid->StorageGrid[coord.xcord][coord.zcord]->reference != NULL) {
 			cancel = -1;
 			cout << "Grid space already occupied\n";
 			cout << "- Try again (press anything)\n";
@@ -376,8 +385,8 @@ Coords addMenu(StorageRequest* grid[3][3]) {
 		system("cls");
 		StorageRequest* newItem = (StorageRequest*) malloc(sizeof(StorageRequest));
 		newItem->reference = -1;
-		newItem->name = "";
 		newItem->expiration = -1;
+		newItem->name = new string;
 		int ref;
 		while (newItem->reference == -1) {
 			cout << "Insert Reference [1..15]:\n\t:";
@@ -390,12 +399,17 @@ Coords addMenu(StorageRequest* grid[3][3]) {
 			}
 		}
 		cout << "Insert Name of the Product:\n\t:";
-		cin >> newItem->name;
-
+		string strin;
+		cin >> strin;
+		*newItem->name = strin;
 		cout << "Insert expiration:\n\t:";
 		scanf("%d", &newItem->expiration);
 
-		grid[coord.xcord][coord.zcord] = newItem;
+		grid->StorageGrid[coord.xcord][coord.zcord] = newItem;
+		
+		//grid->StorageGrid[coord.xcord][coord.zcord]->reference = newItem.reference;
+		//grid->StorageGrid[coord.xcord][coord.zcord]->name = (newItem.name);
+		//grid->StorageGrid[coord.xcord][coord.zcord]->expiration = newItem.expiration;
 		return coord;
 	}
 	Coords nullItem = {NULL,NULL};
@@ -408,16 +422,9 @@ void cmdUser(void* pvParameters) {
 
 	xQueueHandle mbx_cmd = cmdUser_params->mbx_cmd;
 
-	StorageRequest* grid[3][3];
-	memcpy(grid, cmdUser_params->StorageGrid, sizeof(StorageRequest * [3][3]));
-
-	for (int c = 0; c < 3; c++) {
-		for (int l = 0; l < 3; l++) {
-			grid[c][l] = NULL;
-		}
-	}
-
 	string comm;
+
+	cmdUser_params->StorageGrid[2][1]->expiration = 6;
 
 	while (true) {
 		system("cls");
@@ -438,7 +445,7 @@ void cmdUser(void* pvParameters) {
 			}
 			if (!comm.compare("add")) {
 				if (cmdUser_params->availableSpaces != 0) {
-					Coords coord = addMenu(grid);
+					Coords coord = addMenu(cmdUser_params);
 					if (coord.xcord != NULL) {
 						ServerComms request;
 						request.request = "add";
@@ -453,7 +460,7 @@ void cmdUser(void* pvParameters) {
 				}
 			}
 			if (!comm.compare("info")) {
-				infoMenu(grid);
+				infoMenu(cmdUser_params);
 			}
 			if (!comm.compare("exit")) {
 				exit(0);
@@ -879,7 +886,7 @@ void takeStock(void* pvParameters) {
 
 void vTaskLeftLED(void* pvParameters) {
 	uInt8 p;
-	int time_flag;
+	int time_flag=0;
 
 	LeftLed* LeftLed_param = (LeftLed*)pvParameters;
 	xQueueHandle mbx_LeftLed = LeftLed_param->mbx_LeftLed;
@@ -913,7 +920,7 @@ void vTaskLeftLED(void* pvParameters) {
 // RIGHT  0000 0010  0x2
 void vTaskRightLED(void* pvParameters) {
 	uInt8 p;
-	int time_flag;
+	int time_flag=0;
 
 	RightLed* RightLed_param = (RightLed*)pvParameters;
 	xQueueHandle mbx_RightLed = RightLed_param->mbx_RightLed;
@@ -995,7 +1002,90 @@ void vTaskEmergencyStop(void* pvParameters) {
 	}
 }
 
+void StorageCalibration() {
+	int c;
+	int x = 0, z = 0;
+	uInt8 p0;
+	uInt8 p1;
+
+	while (1) {
+		c = 0;
+		if (_kbhit()) {
+			switch (c = _getch()) {
+			case 72:
+				printf("Up\n");
+				if (z == 0) {
+					moveZUp();
+					while (1) {
+						p0 = readDigitalU8(0);
+						p1 = readDigitalU8(1);
+						if (!getBitValue(p1, 3) || !getBitValue(p1, 1) || !getBitValue(p0, 7)) {
+							stopZ();
+							z = 1;
+							break;
+						}
+					}
+				}
+				break;
+			case 80:
+				printf("Down\n");
+				if (z == 0) {
+					moveZDown();
+					while (1) {
+						p0 = readDigitalU8(0);
+						p1 = readDigitalU8(1);
+						if (!getBitValue(p1, 3) || !getBitValue(p1, 1) || !getBitValue(p0, 7)) {
+							stopZ();
+							z = 1;
+							break;
+						}
+					}
+				}
+				break;
+			case 75:
+				printf("Left\n");
+				if (x == 0) {
+					moveXLeft();
+					while (1) {
+						p0 = readDigitalU8(0);
+						if (!getBitValue(p0, 2) || !getBitValue(p0, 1) || !getBitValue(p0, 0)) {
+							stopX();
+							x = 1;
+							break;
+						}
+					}
+				}
+				break;
+			case 77:
+				printf("Right\n");
+				if (x == 0) {
+					moveXRight();
+					while (1) {
+						p0 = readDigitalU8(0);
+						if (!getBitValue(p0, 2) || !getBitValue(p0, 1) || !getBitValue(p0, 0)) {
+							stopX();
+							x = 1;
+							break;
+						}
+					}
+				}
+				break;
+			}
+		}
+		if (x == 1 && z == 1) {
+			break;
+		}
+	}
+}
+
 void myDaemonTaskStartupHook(void) {
+	StorageRequest nullItem = { NULL };
+	StorageRequest MasterGrid[3][3];
+	for (int c = 0; c < 3; c++) {
+		for (int l = 0; l < 3; l++) {
+			MasterGrid[c][l] = nullItem;
+		}
+	}
 
 	xzCom_param* my_xzCom_param = (xzCom_param*)pvPortMalloc(sizeof(xzCom_param));
 	my_xzCom_param->mbx_xzMov = xQueueCreate(1, sizeof(Coords));
@@ -1058,22 +1148,32 @@ void myDaemonTaskStartupHook(void) {
 	my_taskStockMov_param->addStockCom_params = my_addStockCom_param;
 	my_taskStockMov_param->takeStockCom_params = my_takeStockCom_param;
 
-	cmd_param* my_cmd_param = (cmd_param*)pvPortMalloc(sizeof(cmd_param));
-	my_cmd_param->mbx_cmd = xQueueCreate(90,sizeof(ServerComms));
-	my_cmd_param->xzCom_params = my_xzCom_param;
-	my_cmd_param->addStockCom_params = my_addStockCom_param;
-	my_cmd_param->takeStockCom_params = my_takeStockCom_param;
-	my_cmd_param->availableSpaces = 9;
-
 	LeftLed* my_LeftLed_param = (LeftLed*)pvPortMalloc(sizeof(LeftLed));
 	my_LeftLed_param->mbx_LeftLed = xQueueCreate(1, sizeof(int));
 
 	RightLed* my_RightLed_param = (RightLed*)pvPortMalloc(sizeof(RightLed));
 	my_RightLed_param->mbx_RightLed = xQueueCreate(1, sizeof(int));
-	
+
 	emergency_param* my_emergency_param = (emergency_param*)pvPortMalloc(sizeof(emergency_param));
 	my_emergency_param->LeftLed_param = my_LeftLed_param;
 	my_emergency_param->RightLed_param = my_RightLed_param;
+	
+	cmd_param* my_cmd_param = (cmd_param*)pvPortMalloc(sizeof(cmd_param));
+	my_cmd_param->mbx_cmd = xQueueCreate(90,sizeof(ServerComms));
+	my_cmd_param->xzCom_params = my_xzCom_param;
+	my_cmd_param->addStockCom_params = my_addStockCom_param;
+	my_cmd_param->takeStockCom_params = my_takeStockCom_param;
+	my_cmd_param->emergencyStop_params = my_emergency_param;
+	//my_cmd_param->StorageGrid = MasterGrid;
+	for (int c = 0; c < 3; c++) {
+		for (int l = 0; l < 3; l++) {
+			my_cmd_param->StorageGrid[c][l] = (StorageRequest*) malloc(sizeof(StorageRequest));
+			my_cmd_param->StorageGrid[c][l]->reference = NULL;
+		}
+	}
+	my_cmd_param->availableSpaces = 9;
+
+	
 
 	//xTaskCreate(vTaskCode_2, "vTaskCode_1", 100, NULL, 0, NULL);
 	//xTaskCreate(vTaskCode_1, "vTaskCode_2", 100, NULL, 0, NULL);
@@ -1092,6 +1192,8 @@ void myDaemonTaskStartupHook(void) {
 	xTaskCreate(vTaskRightLED, "vTaskRightLED", 100, my_RightLed_param, 0, NULL);
 	xTaskCreate(vTaskLeftLED, "vTaskLeftLED", 100, my_LeftLed_param, 0, NULL);
 	xTaskCreate(vTaskEmergencyStop, "vTaskEmergencyStop", 100, my_emergency_param, 0, NULL);
+	xTaskCreate(timePass, "timePass", 100, my_cmd_param, 0, NULL);
 
 	initialisePorts();
+	StorageCalibration();
 }
