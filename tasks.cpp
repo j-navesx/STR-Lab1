@@ -169,7 +169,6 @@ void timePass(void* pvParameters) {
 	emergency_param* emergencyStop_params = timePass_params->emergencyStop_params;
 	LeftLed* LeftLed_params = emergencyStop_params->LeftLed_param;
 	xQueueHandle mbx_LeftLed = LeftLed_params->mbx_LeftLed;
-	int expiredFlag = timePass_params->expiredFlag; //estava a dar erro por isso pus isto
 
 	time_t now = time(0);
 	tm* ltm = localtime(&now);
@@ -185,7 +184,7 @@ void timePass(void* pvParameters) {
 					if (timePass_params->StorageGrid[c][l]->reference != NULL) {
 						if (--timePass_params->StorageGrid[c][l]->expiration <= 0) {
 							xQueueSend(mbx_LeftLed, &activate, 0);
-							expiredFlag = 1;
+							timePass_params->expiredFlag = 1;
 						}
 					}
 				}
@@ -398,7 +397,7 @@ Coords coordsInput() {
 }
 
 Coords addMenu(cmd_param* grid) {
-	Coords coord; //estava a dar erro por isso pus aqui
+	Coords coord;
 	int cancel = -2;
 	while (cancel == -2) {
 		cout << "Select position or closest to (1,1)?\n";
@@ -1049,12 +1048,12 @@ void takeExpired(void* pvParameters) {
 				for (int l = 0; l < 3; l++) {
 					if (takeExpired_params->StorageGrid[c][l]->reference != NULL) {
 						if (takeExpired_params->StorageGrid[c][l]->expiration <= 0) {
-							aux.xcord = c;
-							aux.zcord = l;
-							ServerComms auxComm;
-							auxComm.location = aux;
-							auxComm.request = "take";
-							xQueueSend(takeExpired_params->mbx_cmd, &auxComm, 0);
+							aux.xcord = c+1;
+							aux.zcord = l+1;
+							ServerComms request;
+							request.request = "take";
+							request.location = aux;
+							xQueueSend(takeExpired_params->mbx_cmd, &request, 0);
 						}
 					}
 				}
