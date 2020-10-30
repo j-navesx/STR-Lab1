@@ -228,9 +228,9 @@ void iListAll(cmd_param* grid) {
 					cout << *grid->StorageGrid[c][l]->name;
 					cout << "-";
 					printf("(%d,%d)", c+1, l+1);
-					cout << "-";
+					cout << "-(";
 					cout << grid->StorageGrid[c][l]->expiration;
-					cout << "\n";
+					cout << ")\n";
 				}
 			}
 			
@@ -288,10 +288,10 @@ void iListExp(cmd_param* grid) {
 						cout << "-";
 						cout << *grid->StorageGrid[c][l]->name;
 						cout << "-";
-						printf("(%d,%d)", c, l);
-						cout << "-";
+						printf("(%d,%d)", c+1, l+1);
+						cout << "-(";
 						cout << grid->StorageGrid[c][l]->expiration;
-						cout << "\n";
+						cout << ")\n";
 					}
 				}
 			}
@@ -314,7 +314,46 @@ void iListExp(cmd_param* grid) {
 }
 
 void iSearchProd(cmd_param* grid) {
-	
+	string search;
+	int x = -1;
+	int z = -1;
+	while (true) {
+		system("cls");
+		cout << "\t\t\t\t|  SEARCH REFERENCE MENU  |\n\n\n";
+		cout << "Write the reference you want to search:\n\t:";
+		if (_kbhit()) {
+			cin >> search;
+			if (!search.compare("exit")) {
+				break;
+			}
+			else {
+				for (int c = 0; c < 3; c++) {
+					for (int l = 0; l < 3; l++) {
+						if (grid->StorageGrid[c][l]->reference != NULL) {
+							if (grid->StorageGrid[c][l]->reference == stoi(search)) {
+								x = c;
+								z = l;
+							}
+						}
+					}
+
+
+				}
+			}
+		}
+		if(x != -1){
+			cout << "\n\t\tResult: ";
+			cout << grid->StorageGrid[x][z]->reference;
+			cout << "-";
+			cout << *grid->StorageGrid[x][z]->name;
+			cout << "-";
+			printf("(%d,%d)", x+1, z+1);
+			cout << "-(";
+			cout << grid->StorageGrid[x][z]->expiration;
+			cout << ")\n";
+		}
+		cout << "\n\nexit - Exit menu";
+	}
 }
 
 void infoMenu(cmd_param* grid) {
@@ -351,10 +390,8 @@ Coords coordsInput() {
 	cout << "X Coordinate:\n\t:";
 	scanf("%*c");
 	scanf("%d", &coord.xcord);
-	coord.xcord--;
 	cout << "Z Coordinate:\n\t:";
 	scanf("%d", &coord.zcord);
-	coord.zcord--;
 	return coord;
 }
 
@@ -362,8 +399,8 @@ Coords addMenu(cmd_param* grid) {
 	int cancel = -1;
 	Coords coord = coordsInput();
 	while (cancel == -1) {
-		cout << grid->StorageGrid[coord.xcord][coord.zcord]->reference;
-		if (grid->StorageGrid[coord.xcord][coord.zcord]->reference != NULL) {
+		cout << grid->StorageGrid[coord.xcord-1][coord.zcord-1]->reference;
+		if (grid->StorageGrid[coord.xcord-1][coord.zcord-1]->reference != NULL) {
 			cancel = -1;
 			cout << "Grid space already occupied\n";
 			cout << "- Try again (press anything)\n";
@@ -405,7 +442,7 @@ Coords addMenu(cmd_param* grid) {
 		cout << "Insert expiration:\n\t:";
 		scanf("%d", &newItem->expiration);
 
-		grid->StorageGrid[coord.xcord][coord.zcord] = newItem;
+		grid->StorageGrid[coord.xcord-1][coord.zcord-1] = newItem;
 		
 		//grid->StorageGrid[coord.xcord][coord.zcord]->reference = newItem.reference;
 		//grid->StorageGrid[coord.xcord][coord.zcord]->name = (newItem.name);
@@ -501,6 +538,7 @@ void cmd(void* pvParameters) {
 			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
 		}
 		if (!requestReceived.request.compare("add")) {
+			xQueueSend(mbx_addStockMov, &requestReceived.location, 0);
 			//move to Pos
 			//put box in place
 		}
@@ -511,7 +549,10 @@ void cmd(void* pvParameters) {
 void gotoXZ(void* pvParameters) {
 	int x, z, y;
 	int coords[2];
+	Coords coord;
 	
+
+
 	//XZ needed parameters 
 	taskXZ_param* gotoXZ_params = (taskXZ_param*)pvParameters;
 	
@@ -536,7 +577,7 @@ void gotoXZ(void* pvParameters) {
 	xSemaphoreHandle sem_yMov = yMov_params->sem_yMov;
 
 	while (true) {
-		xQueueReceive(mbx_xzMov, &coords, portMAX_DELAY);
+		xQueueReceive(mbx_xzMov, &coord, portMAX_DELAY);
 		//printf("\n%d,%d\n", coords[0], coords[1]);
 
 		if (getYPos() != 2) {
@@ -545,8 +586,10 @@ void gotoXZ(void* pvParameters) {
 			xSemaphoreTake(sem_yMov, portMAX_DELAY);
 		}
 
-		x = coords[0];
-		z = coords[1];
+		//x = coords[0];
+		//z = coords[1];
+		x = coord.xcord;
+		z = coord.zcord;
 
 		xQueueSend(mbx_xMov, &x, portMAX_DELAY);
 		xQueueSend(mbx_zMov, &z, portMAX_DELAY);
