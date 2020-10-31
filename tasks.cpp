@@ -162,6 +162,7 @@ void initialisePorts() {
 void idleStore(void * pvParameters) {
 	cmd_param* idle_params = (cmd_param*)pvParameters;
 	int boxNumber = 9 - idle_params->availableSpaces;
+	int currBoxNumber = 9 - idle_params->availableSpaces;
 	array<int, 15> indexes = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 	array<array<tuple<int, Coords>, 9>, 15> boxes;
 	int index;
@@ -172,26 +173,33 @@ void idleStore(void * pvParameters) {
 	Coords originalCoords;
 	Coords destinationCoords;
 	ServerComms request;
+	int i = 0;
+	int k = 0;
 	while (true) {
 		//Verify if idle
 		while (uxSemaphoreGetCount(idle_params->sem_cmd) == 0) {
 			//order boxes by reference with specific coordinates
-			for (c = 0; c < 3; c++) {
-				for (l = 0; l < 3; l++) {
-					if (idle_params->StorageGrid[c][l]->reference != NULL) {
-						index = idle_params->StorageGrid[c][l]->reference - 1;
-						coord.xcord = c + 1;
-						coord.zcord = l + 1;
-						boxes[index][indexes[index]] = make_tuple(index, coord);
-						indexes[index]++;
+			boxNumber = 9 - idle_params->availableSpaces;
+			if (currBoxNumber != boxNumber) {
+				currBoxNumber = boxNumber;
+				for (c = 0; c < 3; c++) {
+					for (l = 0; l < 3; l++) {
+						if (idle_params->StorageGrid[c][l]->reference != NULL) {
+							index = idle_params->StorageGrid[c][l]->reference - 1;
+							coord.xcord = c + 1;
+							coord.zcord = l + 1;
+							boxes[index][indexes[index]] = make_tuple(index, coord);
+							indexes[index]++;
+						}
 					}
 				}
 			}
 			if (uxSemaphoreGetCount(idle_params->sem_cmd) == 1) {
 				time_t now = time(0);
 				tm* ltm = localtime(&now);
+				int sec = ltm->tm_sec;
 				int min = ltm->tm_min;
-				while (ltm->tm_min - min == 1) {
+				while (ltm->tm_min - min != 1 && ltm->tm_sec - sec == 0) {
 					time_t now = time(0);
 					tm* ltm = localtime(&now);
 					taskYIELD();
@@ -199,96 +207,104 @@ void idleStore(void * pvParameters) {
 			}
 		}
 		//order boxes by reference with specific coordinates
-		int i = 0;
-		int k = 0;
-		if (boxNumber && uxSemaphoreGetCount(idle_params->sem_cmd) == 1) {
-			if (i <= indexes.size()) {
-				//check if there are any objects with the reference
-				if (indexes[i] != 0) {
-					if (k < indexes[i]) {
-						c = nOrdered % 3;
-						l = nOrdered / 3;
-						//Space not occupied
-						if (idle_params->StorageGrid[c][l]->reference == NULL) {
-							//Coords from the box we want to change
-							originalCoords.xcord = get<1>(boxes[i][k]).xcord;
-							originalCoords.zcord = get<1>(boxes[i][k]).zcord;
-							//Alocate item to change
-							StorageRequest* auxItem1 = (StorageRequest*)malloc(sizeof(StorageRequest));
-							auxItem1 = idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1];
-							//Delete from the old space
-							free(idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1]);
-							idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1] = (StorageRequest*)malloc(sizeof(StorageRequest));
-							idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1] = &nullItem;
-							//Put item in place
-							idle_params->StorageGrid[c][l] = auxItem1;
-							destinationCoords.xcord = c + 1;
-							destinationCoords.zcord = l + 1;
-							//Create Request
-							ServerComms request;
-							request.request = "moveto";
-							request.location = originalCoords;
-							request.location2 = destinationCoords;
-							//Send Request
-							xQueueSend(idle_params->mbx_cmd, &request, 0);
-							nOrdered++;
-						}
-						//Space occupied
-						else {
-							// MOVE ITEM IN THE WRONG PLACE
-							//Put element in the last spaces of priorityList
-							for (int i = 9; i >= 0; i--) {
-								if (idle_params->StorageGrid[priorityList[i].xcord - 1][priorityList[i].zcord - 1]->reference == NULL) {
-									destinationCoords.xcord = priorityList[i].xcord;
-									destinationCoords.zcord = priorityList[i].zcord;
-									break;
-								}
-							}
-							originalCoords.xcord = c + 1;
-							originalCoords.xcord = l + 1;
-							//Alocate item to change
-							StorageRequest* auxItem2 = (StorageRequest*)malloc(sizeof(StorageRequest));
-							auxItem2 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
-							//Delete from the old space
-							free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
-							idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
-							idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = &nullItem;
-							//Put item in place
-							idle_params->StorageGrid[destinationCoords.xcord][destinationCoords.zcord] = auxItem2;
-							//Create Request
-							request.request = "moveto";
-							request.location = originalCoords;
-							request.location2 = destinationCoords;
-							//Send Request
-							xQueueSend(idle_params->mbx_cmd, &request, 0);
+		
+		if (i == indexes.size() + 1) {
+			i = 0;
+		}
+		if (k == 10) {
+			k = 0;
+		}
 
-							//MOVE THE ITEM TO THE CORRECT PLACE
-							//Coords from the box we want to change
-							originalCoords.xcord = get<1>(boxes[i][k]).xcord;
-							originalCoords.zcord = get<1>(boxes[i][k]).zcord;
-							//Alocate item to change
-							StorageRequest* auxItem3 = (StorageRequest*)malloc(sizeof(StorageRequest));
-							auxItem3 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
-							//Delete from the old space
-							free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
-							idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
-							idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = &nullItem;
-							//Put item in place
-							idle_params->StorageGrid[c][l] = auxItem3;
-							destinationCoords.xcord = c + 1;
-							destinationCoords.zcord = l + 1;
-							//Create Request
-							request.request = "moveto";
-							request.location = originalCoords;
-							request.location2 = destinationCoords;
-							//Send Request
-							xQueueSend(idle_params->mbx_cmd, &request, 0);
-							nOrdered++;
+		if (boxNumber && uxSemaphoreGetCount(idle_params->sem_cmd) == 1) {
+			if (boxNumber != nOrdered) {
+				if (i <= indexes.size()) {
+					//check if there are any objects with the reference
+					if (indexes[i] != 0) {
+						if (k < indexes[i]) {
+							c = nOrdered % 3;
+							l = nOrdered / 3;
+							//Space not occupied
+							if (idle_params->StorageGrid[c][l]->reference == NULL) {
+								//Coords from the box we want to change
+								originalCoords.xcord = get<1>(boxes[i][k]).xcord;
+								originalCoords.zcord = get<1>(boxes[i][k]).zcord;
+								//Alocate item to change
+								StorageRequest* auxItem1 = (StorageRequest*)malloc(sizeof(StorageRequest));
+								auxItem1 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
+								//Delete from the old space
+								//free(idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1]);
+								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
+								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = &nullItem;
+								//Put item in place
+								idle_params->StorageGrid[c][l] = auxItem1;
+								destinationCoords.xcord = c + 1;
+								destinationCoords.zcord = l + 1;
+								//Create Request
+								ServerComms request;
+								request.request = "moveto";
+								request.location = originalCoords;
+								request.location2 = destinationCoords;
+								//Send Request
+								xQueueSend(idle_params->mbx_cmd, &request, 0);
+								nOrdered++;
+							}
+							//Space occupied
+							else {
+								// MOVE ITEM IN THE WRONG PLACE
+								//Put element in the last spaces of priorityList
+								for (int i = 9; i >= 0; i--) {
+									if (idle_params->StorageGrid[priorityList[i].xcord - 1][priorityList[i].zcord - 1]->reference == NULL) {
+										destinationCoords.xcord = priorityList[i].xcord;
+										destinationCoords.zcord = priorityList[i].zcord;
+										break;
+									}
+								}
+								originalCoords.xcord = c + 1;
+								originalCoords.xcord = l + 1;
+								//Alocate item to change
+								StorageRequest* auxItem2 = (StorageRequest*)malloc(sizeof(StorageRequest));
+								auxItem2 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
+								//Delete from the old space
+								//free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
+								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
+								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = &nullItem;
+								//Put item in place
+								idle_params->StorageGrid[destinationCoords.xcord][destinationCoords.zcord] = auxItem2;
+								//Create Request
+								request.request = "moveto";
+								request.location = originalCoords;
+								request.location2 = destinationCoords;
+								//Send Request
+								xQueueSend(idle_params->mbx_cmd, &request, 0);
+
+								//MOVE THE ITEM TO THE CORRECT PLACE
+								//Coords from the box we want to change
+								originalCoords.xcord = get<1>(boxes[i][k]).xcord;
+								originalCoords.zcord = get<1>(boxes[i][k]).zcord;
+								//Alocate item to change
+								StorageRequest* auxItem3 = (StorageRequest*)malloc(sizeof(StorageRequest));
+								auxItem3 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
+								//Delete from the old space
+								free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
+								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
+								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = &nullItem;
+								//Put item in place
+								idle_params->StorageGrid[c][l] = auxItem3;
+								destinationCoords.xcord = c + 1;
+								destinationCoords.zcord = l + 1;
+								//Create Request
+								request.request = "moveto";
+								request.location = originalCoords;
+								request.location2 = destinationCoords;
+								//Send Request
+								xQueueSend(idle_params->mbx_cmd, &request, 0);
+								nOrdered++;
+							}
+							k++;
 						}
-						k++;
 					}
+					i++;
 				}
-				i++;
 			}
 		}
 	}
@@ -300,15 +316,14 @@ void timePass(void* pvParameters) {
 	emergency_param* emergencyStop_params = timePass_params->emergencyStop_params;
 	LeftLed* LeftLed_params = emergencyStop_params->LeftLed_param;
 	xQueueHandle mbx_LeftLed = LeftLed_params->mbx_LeftLed;
-
-	time_t now = time(0);
-	tm* ltm = localtime(&now);
-	int min = ltm->tm_min;
+	
 	int activate = 1;
 	while (true) {
 		time_t now = time(0);
 		tm* ltm = localtime(&now);
-		if (ltm->tm_min != min) {
+		int min = ltm->tm_min;
+		int sec = ltm->tm_sec;
+		if (ltm->tm_min - min != 1 && ltm->tm_sec - sec == 0) {
 			min = ltm->tm_min;
 			for (int c = 0; c < 3; c++) {
 				for (int l = 0; l < 3; l++) {
@@ -747,6 +762,7 @@ void cmd(void* pvParameters) {
 
 	//cmd communication paramaters
 	xQueueHandle mbx_cmd = cmd_params->mbx_cmd;
+	xSemaphoreHandle sem_cmd = cmd_params->sem_cmd;
 
 	//XZ comunication parameters 
 	xzCom_param* xzCom_params = cmd_params->xzCom_params;
@@ -767,7 +783,7 @@ void cmd(void* pvParameters) {
 
 	while (true) {
 		xQueueReceive(mbx_cmd, &requestReceived, portMAX_DELAY);
-		//semaphore take
+		xSemaphoreTake(sem_cmd, portMAX_DELAY);
 		if (!requestReceived.request.compare("goto")) {
 			xQueueSend(mbx_xzMov, &requestReceived.location, 0);
 			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
@@ -783,7 +799,7 @@ void cmd(void* pvParameters) {
 		if (!requestReceived.request.compare("moveto")) {
 
 		}
-		//Semaphore give
+		xSemaphoreGive(sem_cmd);
 	}
 
 }
