@@ -171,46 +171,61 @@ void idleStore(cmd_param* idle_params) {
 	int c, l;
 	StorageRequest nullItem = {NULL,NULL,NULL};
 	Coords originalCoords;
-	//order boxes by reference with specific coordinates
-	for (c = 0; c < 3; c++) {
-		for (l = 0; l < 3; l++) {
-			if (idle_params->StorageGrid[c][l]->reference != NULL) {
-				index = idle_params->StorageGrid[c][l]->reference - 1;
-				coord.xcord = c + 1;
-				coord.zcord = l + 1;
-				boxes[index][indexes[index]] = make_tuple(index, coord);
-				indexes[index]++;
+	while (true) {
+		//Verify if idle
+		while (uxSemaphoreGetCount(sem_cmd) == 0) {
+			//order boxes by reference with specific coordinates
+			for (c = 0; c < 3; c++) {
+				for (l = 0; l < 3; l++) {
+					if (idle_params->StorageGrid[c][l]->reference != NULL) {
+						index = idle_params->StorageGrid[c][l]->reference - 1;
+						coord.xcord = c + 1;
+						coord.zcord = l + 1;
+						boxes[index][indexes[index]] = make_tuple(index, coord);
+						indexes[index]++;
+					}
+				}
+			}
+			if (uxSemaphoreGetCount(sem_cmd) == 1) {
+				//wait time
 			}
 		}
-	}
-	for (int i = 0; i <= indexes.size(); i++) {
-		//check if there are any objects with the reference
-		if (indexes[i] != 0) {
-			for (int k = 0; k < indexes[i]; k++) {
-				c = nOrdered % 3;
-				l = nOrdered / 3;
-				//Space not occupied
-				if (idle_params->StorageGrid[c][l]->reference == NULL) {
-					//Coords from the box we want to change
-					originalCoords.xcord = get<1>(boxes[i][k]).xcord;
-					originalCoords.zcord = get<1>(boxes[i][k]).zcord;
-					//Alocate item to change
-					StorageRequest* auxItem = (StorageRequest*) malloc(sizeof(StorageRequest));
-					auxItem = idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord];
-					//Delete from the old space
-					free(idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord]);
-					idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = (StorageRequest*)malloc(sizeof(StorageRequest));
-					idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = &nullItem;
-					//Put item in place
-					idle_params->StorageGrid[c][l] = auxItem;
-					//Create Request TODO
-					nOrdered++;
-				}
-				//Space occupied
-				else {
-					//Put element in the last spaces of priorityList
+		//order boxes by reference with specific coordinates
+		int i = 0;
+		int k = 0;
+		if (boxNumber && uxSemaphoreGetCount(sem_cmd) == 1) {
+			if (i <= indexes.size()) {
+				//check if there are any objects with the reference
+				if (indexes[i] != 0) {
+					if (k < indexes[i]) {
+						c = nOrdered % 3;
+						l = nOrdered / 3;
+						//Space not occupied
+						if (idle_params->StorageGrid[c][l]->reference == NULL) {
+							//Coords from the box we want to change
+							originalCoords.xcord = get<1>(boxes[i][k]).xcord;
+							originalCoords.zcord = get<1>(boxes[i][k]).zcord;
+							//Alocate item to change
+							StorageRequest* auxItem = (StorageRequest*)malloc(sizeof(StorageRequest));
+							auxItem = idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord];
+							//Delete from the old space
+							free(idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord]);
+							idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = (StorageRequest*)malloc(sizeof(StorageRequest));
+							idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = &nullItem;
+							//Put item in place
+							idle_params->StorageGrid[c][l] = auxItem;
+							//Create Request TODO
+							nOrdered++;
+						}
+						//Space occupied
+						else {
+							//Put element in the last spaces of priorityList
 
+						}
+						k++;
+					}
 				}
+				i++;
 			}
 		}
 	}
