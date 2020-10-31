@@ -305,7 +305,7 @@ void idleStore(void * pvParameters) {
 								StorageRequest* auxItem3 = (StorageRequest*)malloc(sizeof(StorageRequest));
 								auxItem3 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
 								//Delete from the old space
-								free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
+								//free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
 								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
 								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = &nullItem;
 								//Put item in place
