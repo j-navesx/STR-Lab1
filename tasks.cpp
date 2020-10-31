@@ -1288,6 +1288,7 @@ void takeExpired(void* pvParameters) {
 							request.location = aux;
 							xQueueSend(takeExpired_params->mbx_cmd, &request, 0);
 							takeExpired_params->StorageGrid[c][l] = &nullItem;
+							takeExpired_params->availableSpaces--;
 						}
 					}
 				}
