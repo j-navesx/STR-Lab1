@@ -32,6 +32,7 @@ typedef struct {
 typedef struct {
 	string request;
 	Coords location;
+	Coords location2;
 }ServerComms;
 
 typedef struct {
@@ -133,6 +134,7 @@ typedef struct {
 	int availableSpaces;
 	int expiredFlag;
 	xQueueHandle mbx_cmd;
+	xSemaphoreHandle sem_cmd;
 	xzCom_param* xzCom_params;
 	addStockCom_param* addStockCom_params;
 	takeStockCom_param* takeStockCom_params;
@@ -161,7 +163,8 @@ void initialisePorts() {
 	writeDigitalU8(2, 0);
 }
 
-void idleStore(cmd_param* idle_params) {
+void idleStore(void * pvParameters) {
+	cmd_param* idle_params = (cmd_param*)pvParameters;
 	int boxNumber = 9 - idle_params->availableSpaces;
 	array<int, 15> indexes = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 	array<array<tuple<int, Coords>, 9>, 15> boxes;
@@ -171,9 +174,11 @@ void idleStore(cmd_param* idle_params) {
 	int c, l;
 	StorageRequest nullItem = {NULL,NULL,NULL};
 	Coords originalCoords;
+	Coords destinationCoords;
+	ServerComms request;
 	while (true) {
 		//Verify if idle
-		while (uxSemaphoreGetCount(sem_cmd) == 0) {
+		while (uxSemaphoreGetCount(idle_params->sem_cmd) == 0) {
 			//order boxes by reference with specific coordinates
 			for (c = 0; c < 3; c++) {
 				for (l = 0; l < 3; l++) {
@@ -186,14 +191,21 @@ void idleStore(cmd_param* idle_params) {
 					}
 				}
 			}
-			if (uxSemaphoreGetCount(sem_cmd) == 1) {
-				//wait time
+			if (uxSemaphoreGetCount(idle_params->sem_cmd) == 1) {
+				time_t now = time(0);
+				tm* ltm = localtime(&now);
+				int min = ltm->tm_min;
+				while (ltm->tm_min - min == 1) {
+					time_t now = time(0);
+					tm* ltm = localtime(&now);
+					taskYIELD();
+				}
 			}
 		}
 		//order boxes by reference with specific coordinates
 		int i = 0;
 		int k = 0;
-		if (boxNumber && uxSemaphoreGetCount(sem_cmd) == 1) {
+		if (boxNumber && uxSemaphoreGetCount(idle_params->sem_cmd) == 1) {
 			if (i <= indexes.size()) {
 				//check if there are any objects with the reference
 				if (indexes[i] != 0) {
@@ -206,21 +218,76 @@ void idleStore(cmd_param* idle_params) {
 							originalCoords.xcord = get<1>(boxes[i][k]).xcord;
 							originalCoords.zcord = get<1>(boxes[i][k]).zcord;
 							//Alocate item to change
-							StorageRequest* auxItem = (StorageRequest*)malloc(sizeof(StorageRequest));
-							auxItem = idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord];
+							StorageRequest* auxItem1 = (StorageRequest*)malloc(sizeof(StorageRequest));
+							auxItem1 = idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1];
 							//Delete from the old space
-							free(idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord]);
-							idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = (StorageRequest*)malloc(sizeof(StorageRequest));
-							idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = &nullItem;
+							free(idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1]);
+							idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1] = (StorageRequest*)malloc(sizeof(StorageRequest));
+							idle_params->StorageGrid[originalCoords.xcord-1][originalCoords.zcord-1] = &nullItem;
 							//Put item in place
-							idle_params->StorageGrid[c][l] = auxItem;
-							//Create Request TODO
+							idle_params->StorageGrid[c][l] = auxItem1;
+							destinationCoords.xcord = c + 1;
+							destinationCoords.zcord = l + 1;
+							//Create Request
+							ServerComms request;
+							request.request = "moveto";
+							request.location = originalCoords;
+							request.location2 = destinationCoords;
+							//Send Request
+							xQueueSend(idle_params->mbx_cmd, &request, 0);
 							nOrdered++;
 						}
 						//Space occupied
 						else {
+							// MOVE ITEM IN THE WRONG PLACE
 							//Put element in the last spaces of priorityList
+							for (int i = 9; i >= 0; i--) {
+								if (idle_params->StorageGrid[priorityList[i].xcord - 1][priorityList[i].zcord - 1]->reference == NULL) {
+									destinationCoords.xcord = priorityList[i].xcord;
+									destinationCoords.zcord = priorityList[i].zcord;
+									break;
+								}
+							}
+							originalCoords.xcord = c + 1;
+							originalCoords.xcord = l + 1;
+							//Alocate item to change
+							StorageRequest* auxItem2 = (StorageRequest*)malloc(sizeof(StorageRequest));
+							auxItem2 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
+							//Delete from the old space
+							free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
+							idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
+							idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = &nullItem;
+							//Put item in place
+							idle_params->StorageGrid[destinationCoords.xcord][destinationCoords.zcord] = auxItem2;
+							//Create Request
+							request.request = "moveto";
+							request.location = originalCoords;
+							request.location2 = destinationCoords;
+							//Send Request
+							xQueueSend(idle_params->mbx_cmd, &request, 0);
 
+							//MOVE THE ITEM TO THE CORRECT PLACE
+							//Coords from the box we want to change
+							originalCoords.xcord = get<1>(boxes[i][k]).xcord;
+							originalCoords.zcord = get<1>(boxes[i][k]).zcord;
+							//Alocate item to change
+							StorageRequest* auxItem3 = (StorageRequest*)malloc(sizeof(StorageRequest));
+							auxItem3 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
+							//Delete from the old space
+							free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
+							idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
+							idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = &nullItem;
+							//Put item in place
+							idle_params->StorageGrid[c][l] = auxItem3;
+							destinationCoords.xcord = c + 1;
+							destinationCoords.zcord = l + 1;
+							//Create Request
+							request.request = "moveto";
+							request.location = originalCoords;
+							request.location2 = destinationCoords;
+							//Send Request
+							xQueueSend(idle_params->mbx_cmd, &request, 0);
+							nOrdered++;
 						}
 						k++;
 					}
@@ -269,11 +336,11 @@ void iListAll(cmd_param* grid) {
 		for (int c = 2; c >= 0; c--) {
 			cout << "\t\t------|------|------\n\t\t| ";
 			for (int l = 0; l < 3; l++) {
-				if (grid->StorageGrid[c][l]->reference != NULL) {
-					if (grid->StorageGrid[c][l]->reference < 10) {
+				if (grid->StorageGrid[l][c]->reference != NULL) {
+					if (grid->StorageGrid[l][c]->reference < 10) {
 						cout << "0";
 					}
-					cout << grid->StorageGrid[c][l]->reference;
+					cout << grid->StorageGrid[l][c]->reference;
 				}
 				else {
 					cout << "-1";
@@ -327,12 +394,12 @@ void iListExp(cmd_param* grid) {
 		for (int c = 2; c >= 0; c--) {
 			cout << "\t\t------|------|------\n\t\t| ";
 			for (int l = 0; l < 3; l++) {
-				if (grid->StorageGrid[c][l]->reference != NULL) {
-					if (grid->StorageGrid[c][l]->expiration <= 0) {
-						if (grid->StorageGrid[c][l]->reference < 10) {
+				if (grid->StorageGrid[l][c]->reference != NULL) {
+					if (grid->StorageGrid[l][c]->expiration <= 0) {
+						if (grid->StorageGrid[l][c]->reference < 10) {
 							cout << "0";
 						}
-						cout << grid->StorageGrid[c][l]->reference;
+						cout << grid->StorageGrid[l][c]->reference;
 					}
 					else {
 						cout << "-1";
@@ -470,15 +537,22 @@ void infoMenu(cmd_param* grid) {
 }
 
 Coords coordsInput() {
-	//TODO RESTRICTIONS
 	system("cls");
-	Coords coord;
-	cout << "X Coordinate:\n\t:";
-	scanf("%*c");
-	scanf("%d", &coord.xcord);
-	cout << "Z Coordinate:\n\t:";
-	scanf("%d", &coord.zcord);
-	return coord;
+	int success = 0;
+	while (!success) {
+		Coords coord;
+		cout << "X Coordinate:\n\t:";
+		scanf("%*c");
+		scanf("%d", &coord.xcord);
+		cout << "Z Coordinate:\n\t:";
+		scanf("%d", &coord.zcord);
+		if (coord.xcord >= 1 && coord.xcord <= 3 && coord.zcord >= 1 && coord.zcord <= 3) {
+			success = 1;
+			return coord;
+		}
+		system("cls");
+		cout << "Coordinates out of bounds\n";
+	}
 }
 
 Coords addMenu(cmd_param* grid) {
@@ -1510,6 +1584,7 @@ void myDaemonTaskStartupHook(void) {
 
 	cmd_param* my_cmd_param = (cmd_param*)pvPortMalloc(sizeof(cmd_param));
 	my_cmd_param->mbx_cmd = xQueueCreate(90, sizeof(ServerComms));
+	my_cmd_param->sem_cmd = xSemaphoreCreateCounting(1, 1);
 	my_cmd_param->xzCom_params = my_xzCom_param;
 	my_cmd_param->addStockCom_params = my_addStockCom_param;
 	my_cmd_param->takeStockCom_params = my_takeStockCom_param;
@@ -1542,6 +1617,7 @@ void myDaemonTaskStartupHook(void) {
 	//xTaskCreate(vTaskEmergencyStop, "vTaskEmergencyStop", 100, my_emergency_param, 0, NULL);
 	xTaskCreate(timePass, "timePass", 100, my_cmd_param, 0, NULL);
 	xTaskCreate(takeExpired, "takeExpired", 100, my_cmd_param, 0, NULL);
+	xTaskCreate(idleStore, "idleStore", 100, my_cmd_param, 0, NULL);
 	
 	attachInterrupt(1, 6, switch2_rising_isr, RISING);
 	attachInterrupt(1, 5, switch1_rising_isr, RISING);
