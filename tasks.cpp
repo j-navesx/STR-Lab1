@@ -4,6 +4,10 @@
 #include<string>
 #include<cstring>
 #include <ctime>
+#include <array>
+#include <functional>
+#include <algorithm>
+#include <tuple>
 #include <windows.h> //for Sleep function
 extern "C" {
 #include <interface.h>
@@ -137,10 +141,9 @@ typedef struct {
 }cmd_param;
 
 xSemaphoreHandle sem_interruptMode;
+Coords priorityList[9] = { {1,1}, {2,1}, {1,2}, {2,2}, {3,1}, {1,3}, {3,2}, {2,3}, {3,3} };
 
 //MAILBOXES
-xQueueHandle mbx_keyb;
-xQueueHandle mbx_request;
 
 TaskHandle_t left_button_handle;
 
@@ -158,6 +161,63 @@ void initialisePorts() {
 	writeDigitalU8(2, 0);
 }
 
+void idleStore(cmd_param* idle_params) {
+	int boxNumber = 9 - idle_params->availableSpaces;
+	array<int, 15> indexes = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+	array<array<tuple<int, Coords>, 9>, 15> boxes;
+	int index;
+	Coords coord;
+	int nOrdered = 0;
+	int c, l;
+	StorageRequest nullItem = {NULL,NULL,NULL};
+	Coords originalCoords;
+	//order boxes by reference with specific coordinates
+	for (c = 0; c < 3; c++) {
+		for (l = 0; l < 3; l++) {
+			if (idle_params->StorageGrid[c][l]->reference != NULL) {
+				index = idle_params->StorageGrid[c][l]->reference - 1;
+				coord.xcord = c + 1;
+				coord.zcord = l + 1;
+				boxes[index][indexes[index]] = make_tuple(index, coord);
+				indexes[index]++;
+			}
+		}
+	}
+	for (int i = 0; i <= indexes.size(); i++) {
+		//check if there are any objects with the reference
+		if (indexes[i] != 0) {
+			for (int k = 0; k < indexes[i]; k++) {
+				for (c = nOrdered % 3; c < 3; c++) {
+					for (l = nOrdered / 3; l < 3; l++) {
+						//Space not occupied
+						if (idle_params->StorageGrid[c][l]->reference == NULL) {
+							//Coords from the box we want to change
+							originalCoords.xcord = get<1>(boxes[i][k]).xcord;
+							originalCoords.zcord = get<1>(boxes[i][k]).zcord;
+							//Alocate item to change
+							StorageRequest* auxItem = (StorageRequest*) malloc(sizeof(StorageRequest));
+							auxItem = idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord];
+							//Delete from the old space
+							free(idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord]);
+							idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = (StorageRequest*)malloc(sizeof(StorageRequest));
+							idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = &nullItem;
+							//Put item in place
+							idle_params->StorageGrid[c][l] = auxItem;
+							//Create Request TODO
+							nOrdered++;
+						}
+						//Space occupied
+						else {
+							//Put element in the last spaces of priorityList
+
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 void timePass(void* pvParameters) {
 	cmd_param* timePass_params = (cmd_param*)pvParameters;
 
@@ -167,13 +227,13 @@ void timePass(void* pvParameters) {
 
 	time_t now = time(0);
 	tm* ltm = localtime(&now);
-	int second = ltm->tm_sec;
+	int min = ltm->tm_min;
 	int activate = 1;
 	while (true) {
 		time_t now = time(0);
 		tm* ltm = localtime(&now);
-		if (ltm->tm_sec != second) {
-			second = ltm->tm_sec;
+		if (ltm->tm_min != min) {
+			min = ltm->tm_min;
 			for (int c = 0; c < 3; c++) {
 				for (int l = 0; l < 3; l++) {
 					if (timePass_params->StorageGrid[c][l]->reference != NULL) {
@@ -193,7 +253,7 @@ void iListAll(cmd_param* grid) {
 	while (true) {
 		system("cls");
 		cout << "\t\t\t\t|  List All Products  |\n\n\n";
-		for (int c = 0; c < 3; c++) {
+		for (int c = 2; c >= 0; c--) {
 			cout << "\t\t------|------|------\n\t\t| ";
 			for (int l = 0; l < 3; l++) {
 				if (grid->StorageGrid[c][l]->reference != NULL) {
@@ -251,7 +311,7 @@ void iListExp(cmd_param* grid) {
 	while (true) {
 		system("cls");
 		cout << "\t\t\t\t|  List Expired Products  |\n\n\n";
-		for (int c = 0; c < 3; c++) {
+		for (int c = 2; c >= 0; c--) {
 			cout << "\t\t------|------|------\n\t\t| ";
 			for (int l = 0; l < 3; l++) {
 				if (grid->StorageGrid[c][l]->reference != NULL) {
@@ -260,6 +320,9 @@ void iListExp(cmd_param* grid) {
 							cout << "0";
 						}
 						cout << grid->StorageGrid[c][l]->reference;
+					}
+					else {
+						cout << "-1";
 					}
 				}
 				else {
@@ -313,6 +376,11 @@ void iSearchProd(cmd_param* grid) {
 	string search;
 	int x = -1;
 	int z = -1;
+	Coords selected[9];
+	for (int i = 0; i < 9; i++) {
+		selected[i].xcord = -1;
+	}
+	int auxSelect = 0;
 	while (true) {
 		system("cls");
 		cout << "\t\t\t\t|  SEARCH REFERENCE MENU  |\n\n\n";
@@ -322,31 +390,39 @@ void iSearchProd(cmd_param* grid) {
 			if (!search.compare("exit")) {
 				break;
 			}
-			else {
+			long int numInt = strtol(search.c_str(), NULL, 10);
+			if(numInt >= 1 && numInt <= 15){
 				for (int c = 0; c < 3; c++) {
 					for (int l = 0; l < 3; l++) {
 						if (grid->StorageGrid[c][l]->reference != NULL) {
 							if (grid->StorageGrid[c][l]->reference == stoi(search)) {
 								x = c;
 								z = l;
+								selected[auxSelect].xcord = c;
+								selected[auxSelect].zcord = l;
+								auxSelect++;
 							}
 						}
 					}
-
-
 				}
 			}
 		}
 		if (x != -1) {
 			cout << "\n\t\tResult: ";
-			cout << grid->StorageGrid[x][z]->reference;
-			cout << "-";
-			cout << *grid->StorageGrid[x][z]->name;
-			cout << "-";
-			printf("(%d,%d)", x + 1, z + 1);
-			cout << "-(";
-			cout << grid->StorageGrid[x][z]->expiration;
-			cout << ")\n";
+			if (auxSelect != 0) {
+				for (int j = 0; j < auxSelect; j++) {
+					x = selected[j].xcord;
+					z = selected[j].zcord;
+					cout << grid->StorageGrid[x][z]->reference;
+					cout << "-";
+					cout << *grid->StorageGrid[x][z]->name;
+					cout << "-";
+					printf("(%d,%d)", x + 1, z + 1);
+					cout << "-(";
+					cout << grid->StorageGrid[x][z]->expiration;
+					cout << ")\n\t\t";
+				}
+			}
 		}
 		cout << "\n\nexit - Exit menu";
 	}
@@ -381,6 +457,7 @@ void infoMenu(cmd_param* grid) {
 }
 
 Coords coordsInput() {
+	//TODO RESTRICTIONS
 	system("cls");
 	Coords coord;
 	cout << "X Coordinate:\n\t:";
@@ -407,7 +484,14 @@ Coords addMenu(cmd_param* grid) {
 		}
 		if (input == 'c') {
 			//select from priority list
-			cancel = 1;
+			for (int i = 0; i < 9; i++) {
+				if (grid->StorageGrid[priorityList[i].xcord - 1][priorityList[i].zcord - 1]->reference == NULL) {
+					coord.xcord = priorityList[i].xcord;
+					coord.zcord = priorityList[i].zcord;
+					cancel = 1;
+					break;
+				}
+			}
 		}
 		if (input == 'e') {
 			cancel = 0;
@@ -469,7 +553,7 @@ Coords addMenu(cmd_param* grid) {
 }
 
 Coords takeMenu(cmd_param* grid) {
-	StorageRequest nullItem = { NULL };
+	StorageRequest nullItem = {NULL,NULL,NULL};
 	int cancel = -1;
 	Coords coord = coordsInput();
 	while (cancel == -1) {
@@ -493,7 +577,8 @@ Coords takeMenu(cmd_param* grid) {
 		}
 	}
 	if (cancel) {
-		grid->StorageGrid[coord.xcord - 1][coord.zcord - 1] = &nullItem;
+		grid->StorageGrid[coord.xcord - 1][coord.zcord - 1] = (StorageRequest*) malloc(sizeof(StorageRequest));
+		grid->StorageGrid[coord.xcord - 1][coord.zcord - 1]->reference = NULL;
 		return coord;
 	}
 	Coords nullCoords = { NULL,NULL };
@@ -516,6 +601,7 @@ void cmdUser(void* pvParameters) {
 			cout << "\n\tCommands available:\n";
 			cout << "- goto\n";
 			cout << "- add\n";
+			cout << "- take\n";
 			cout << "- info\n";
 			cout << "- exit\n";
 			cout << "\nInput your function:\n\t:";
@@ -605,8 +691,10 @@ void cmd(void* pvParameters) {
 		if (!requestReceived.request.compare("add")) {
 			xQueueSend(mbx_addStockMov, &requestReceived.location, 0);
 			xSemaphoreTake(sem_addStockMov, portMAX_DELAY);
-			//move to Pos
-			//put box in place
+		}
+		if (!requestReceived.request.compare("take")) {
+			xQueueSend(mbx_takeStockMov, &requestReceived.location, 0);
+			xSemaphoreTake(sem_takeStockMov, portMAX_DELAY);
 		}
 	}
 
@@ -1028,7 +1116,7 @@ void takeStock(void* pvParameters) {
 void takeExpired(void* pvParameters) {
 	cmd_param* takeExpired_params = (cmd_param*)pvParameters;
 	Coords aux;
-
+	StorageRequest nullItem = { NULL };
 	while (1) {
 		while (uxSemaphoreGetCount(sem_interruptMode) != 4) {
 			taskYIELD();
@@ -1050,6 +1138,7 @@ void takeExpired(void* pvParameters) {
 							request.request = "take";
 							request.location = aux;
 							xQueueSend(takeExpired_params->mbx_cmd, &request, 0);
+							takeExpired_params->StorageGrid[c][l] = &nullItem;
 						}
 					}
 				}
