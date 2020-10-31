@@ -138,6 +138,8 @@ typedef struct {
 	xzCom_param* xzCom_params;
 	addStockCom_param* addStockCom_params;
 	takeStockCom_param* takeStockCom_params;
+	putInCellCom_param* putInCellCom_params;
+	takeFromCellCom_param* takeFromCellCom_params;
 	emergency_param* emergencyStop_params;
 	StorageRequest* StorageGrid[3][3];
 }cmd_param;
@@ -265,7 +267,7 @@ void idleStore(void * pvParameters) {
 									}
 								}
 								originalCoords.xcord = c + 1;
-								originalCoords.xcord = l + 1;
+								originalCoords.zcord = l + 1;
 								//Alocate item to change
 								StorageRequest* auxItem2 = (StorageRequest*)malloc(sizeof(StorageRequest));
 								auxItem2 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
@@ -786,6 +788,16 @@ void cmd(void* pvParameters) {
 	xQueueHandle mbx_takeStockMov = takeStockCom_params->mbx_takeStockMov;
 	xSemaphoreHandle sem_takeStockMov = takeStockCom_params->sem_takeStockMov;
 
+	//putInCell comunication parameters 
+	putInCellCom_param* putInCellCom_params= cmd_params->putInCellCom_params;
+	xSemaphoreHandle sem_putInCellMov = putInCellCom_params->sem_putInCellMov;
+	xSemaphoreHandle sem_putInCellMov_done= putInCellCom_params->sem_putInCellMov_done;
+
+	//takeFromCell comunication parameters 
+	takeFromCellCom_param* takeFromCellCom_params= cmd_params->takeFromCellCom_params;
+	xSemaphoreHandle sem_takeFromCellMov = takeFromCellCom_params->sem_takeFromCellMov;
+	xSemaphoreHandle sem_takeFromCellMov_done = takeFromCellCom_params->sem_takeFromCellMov_done;
+
 	ServerComms requestReceived;
 
 	while (true) {
@@ -804,7 +816,18 @@ void cmd(void* pvParameters) {
 			xSemaphoreTake(sem_takeStockMov, portMAX_DELAY);
 		}
 		if (!requestReceived.request.compare("moveto")) {
-
+			//goto location
+			xQueueSend(mbx_xzMov, &requestReceived.location, 0);
+			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+			//takeFromCell
+			xSemaphoreGive(sem_takeFromCellMov);
+			xSemaphoreTake(sem_takeFromCellMov_done, portMAX_DELAY);
+			//goto location2
+			xQueueSend(mbx_xzMov, &requestReceived.location2, 0);
+			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
+			//putInCell
+			xSemaphoreGive(sem_putInCellMov);
+			xSemaphoreTake(sem_putInCellMov_done, portMAX_DELAY);
 		}
 		xSemaphoreGive(sem_cmd);
 	}
@@ -1556,6 +1579,8 @@ void myDaemonTaskStartupHook(void) {
 	my_cmd_param->xzCom_params = my_xzCom_param;
 	my_cmd_param->addStockCom_params = my_addStockCom_param;
 	my_cmd_param->takeStockCom_params = my_takeStockCom_param;
+	my_cmd_param->putInCellCom_params = my_putInCellCom_param;
+	my_cmd_param->takeFromCellCom_params = my_takeFromCellCom_param;
 	my_cmd_param->emergencyStop_params = my_emergency_param;
 	//my_cmd_param->StorageGrid = MasterGrid;
 	for (int c = 0; c < 3; c++) {
