@@ -187,31 +187,29 @@ void idleStore(cmd_param* idle_params) {
 		//check if there are any objects with the reference
 		if (indexes[i] != 0) {
 			for (int k = 0; k < indexes[i]; k++) {
-				for (c = nOrdered % 3; c < 3; c++) {
-					for (l = nOrdered / 3; l < 3; l++) {
-						//Space not occupied
-						if (idle_params->StorageGrid[c][l]->reference == NULL) {
-							//Coords from the box we want to change
-							originalCoords.xcord = get<1>(boxes[i][k]).xcord;
-							originalCoords.zcord = get<1>(boxes[i][k]).zcord;
-							//Alocate item to change
-							StorageRequest* auxItem = (StorageRequest*) malloc(sizeof(StorageRequest));
-							auxItem = idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord];
-							//Delete from the old space
-							free(idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord]);
-							idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = (StorageRequest*)malloc(sizeof(StorageRequest));
-							idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = &nullItem;
-							//Put item in place
-							idle_params->StorageGrid[c][l] = auxItem;
-							//Create Request TODO
-							nOrdered++;
-						}
-						//Space occupied
-						else {
-							//Put element in the last spaces of priorityList
+				c = nOrdered % 3;
+				l = nOrdered / 3;
+				//Space not occupied
+				if (idle_params->StorageGrid[c][l]->reference == NULL) {
+					//Coords from the box we want to change
+					originalCoords.xcord = get<1>(boxes[i][k]).xcord;
+					originalCoords.zcord = get<1>(boxes[i][k]).zcord;
+					//Alocate item to change
+					StorageRequest* auxItem = (StorageRequest*) malloc(sizeof(StorageRequest));
+					auxItem = idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord];
+					//Delete from the old space
+					free(idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord]);
+					idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = (StorageRequest*)malloc(sizeof(StorageRequest));
+					idle_params->StorageGrid[originalCoords.xcord][originalCoords.zcord] = &nullItem;
+					//Put item in place
+					idle_params->StorageGrid[c][l] = auxItem;
+					//Create Request TODO
+					nOrdered++;
+				}
+				//Space occupied
+				else {
+					//Put element in the last spaces of priorityList
 
-						}
-					}
 				}
 			}
 		}
@@ -684,6 +682,7 @@ void cmd(void* pvParameters) {
 
 	while (true) {
 		xQueueReceive(mbx_cmd, &requestReceived, portMAX_DELAY);
+		//semaphore take
 		if (!requestReceived.request.compare("goto")) {
 			xQueueSend(mbx_xzMov, &requestReceived.location, 0);
 			xSemaphoreTake(sem_xzMov, portMAX_DELAY);
@@ -696,6 +695,10 @@ void cmd(void* pvParameters) {
 			xQueueSend(mbx_takeStockMov, &requestReceived.location, 0);
 			xSemaphoreTake(sem_takeStockMov, portMAX_DELAY);
 		}
+		if (!requestReceived.request.compare("moveto")) {
+
+		}
+		//Semaphore give
 	}
 
 }
