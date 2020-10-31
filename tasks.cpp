@@ -178,6 +178,7 @@ void idleStore(void * pvParameters) {
 	int i = 0;
 	int k = 0;
 	while (true) {
+		boxNumber = 9 - idle_params->availableSpaces;
 		//Verify if idle
 		while (uxSemaphoreGetCount(idle_params->sem_cmd) == 0) {
 			//order boxes by reference with specific coordinates
@@ -215,7 +216,7 @@ void idleStore(void * pvParameters) {
 		}
 		//order boxes by reference with specific coordinates
 		
-		if (i == indexes.size() + 1) {
+		if (i == indexes.size()) {
 			i = 0;
 		}
 		if (k == 10) {
