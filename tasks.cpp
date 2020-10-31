@@ -145,10 +145,6 @@ typedef struct {
 xSemaphoreHandle sem_interruptMode;
 Coords priorityList[9] = { {1,1}, {2,1}, {1,2}, {2,2}, {3,1}, {1,3}, {3,2}, {2,3}, {3,3} };
 
-//MAILBOXES
-
-TaskHandle_t left_button_handle;
-
 #define INCLUDE_vTaskSuspend 1
 #define LED_PERIOD 500
 
@@ -1329,57 +1325,6 @@ void vTaskRightLED(void* pvParameters) {
 		}
 	}
 }
-
-/*void vTaskEmergencyStop(void* pvParameters) {
-	uInt8 p;
-
-	emergency_param* emergency_params = (emergency_param*)pvParameters;
-	RightLed* RightLed_param = emergency_params->RightLed_param;
-	LeftLed* LeftLed_param = emergency_params->LeftLed_param;
-
-	xQueueHandle mbx_RightLed = RightLed_param->mbx_RightLed;
-	xQueueHandle mbx_LeftLed = LeftLed_param->mbx_LeftLed;
-	int time_flag;
-
-	while (TRUE) {
-		//Switch 1 -> p1 xx1x xxxx
-		//Switch 2 -> p1 x1xx xxxx
-		p = readDigitalU8(1);
-		if (getBitValue(p, 5) && getBitValue(p, 6)) { // If both pressed, enter Emergency Stop
-			uInt8 currentMovement_State = readDigitalU8(2); //save the current grid movement state
-			printf("\n\n!! Emergency Stop !!\n\n");
-
-			time_flag = 1;
-			xQueueSend(mbx_RightLed, &time_flag, portMAX_DELAY);
-			xQueueSend(mbx_LeftLed, &time_flag, portMAX_DELAY);
-
-			vTaskSuspend(left_button_handle); //Depende de como a FR7 for feita
-			taskENTER_CRITICAL();
-			writeDigitalU8(2, 0); //stop all movement
-			taskEXIT_CRITICAL();
-
-			while (TRUE) {
-				p = readDigitalU8(1);
-				if (getBitValue(p, 5) && !getBitValue(p, 6)) {  //Pressed left button. Resume Operation.
-					printf("\nFalse Alarm. Resuming operation.\n");
-					taskENTER_CRITICAL();
-					writeDigitalU8(2, currentMovement_State); //resumes the state before forced stopped
-					taskEXIT_CRITICAL();
-					break;
-				}
-				else if (getBitValue(p, 6) && !getBitValue(p, 5)) { //Pressed right button. Reset System.
-
-					break;
-				}
-			}
-
-			vTaskResume(left_button_handle); // depende de como fizeres a FR7
-			time_flag = 0;
-			xQueueSend(mbx_RightLed, &time_flag, portMAX_DELAY);
-			xQueueSend(mbx_LeftLed, &time_flag, portMAX_DELAY);
-		}
-	}
-}*/
 
 void StorageCalibration() {
 	int c;
