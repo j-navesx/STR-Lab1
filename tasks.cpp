@@ -183,6 +183,9 @@ void idleStore(void * pvParameters) {
 		while (uxSemaphoreGetCount(idle_params->sem_cmd) == 0) {
 			//order boxes by reference with specific coordinates
 			boxNumber = 9 - idle_params->availableSpaces;
+			if (nOrdered > boxNumber) {
+				nOrdered = boxNumber;
+			}
 			if (currBoxNumber != boxNumber) {
 				currBoxNumber = boxNumber;
 				for (c = 0; c < 3; c++) {
@@ -247,6 +250,9 @@ void idleStore(void * pvParameters) {
 								idle_params->StorageGrid[c][l] = auxItem1;
 								destinationCoords.xcord = c + 1;
 								destinationCoords.zcord = l + 1;
+								
+								get<1>(boxes[i][k]).xcord = destinationCoords.xcord;
+								get<1>(boxes[i][k]).zcord = destinationCoords.zcord;
 								//Create Request
 								ServerComms request;
 								request.request = "moveto";
@@ -272,6 +278,12 @@ void idleStore(void * pvParameters) {
 								//Alocate item to change
 								StorageRequest* auxItem2 = (StorageRequest*)malloc(sizeof(StorageRequest));
 								auxItem2 = idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1];
+								for (int m = 0; m < 9; m++) {
+									if (originalCoords.xcord - 1 == get<1>(boxes[idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]->reference][m]).xcord && originalCoords.zcord - 1 == get<1>(boxes[idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]->reference][m]).zcord) {
+										get<1>(boxes[idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]->reference][m]).xcord = destinationCoords.xcord;
+										get<1>(boxes[idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]->reference][m]).zcord = destinationCoords.zcord;
+									}
+								}
 								//Delete from the old space
 								//free(idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1]);
 								idle_params->StorageGrid[originalCoords.xcord - 1][originalCoords.zcord - 1] = (StorageRequest*)malloc(sizeof(StorageRequest));
@@ -300,6 +312,8 @@ void idleStore(void * pvParameters) {
 								idle_params->StorageGrid[c][l] = auxItem3;
 								destinationCoords.xcord = c + 1;
 								destinationCoords.zcord = l + 1;
+								get<1>(boxes[i][k]).xcord = destinationCoords.xcord;
+								get<1>(boxes[i][k]).zcord = destinationCoords.zcord;
 								//Create Request
 								request.request = "moveto";
 								request.location = originalCoords;
