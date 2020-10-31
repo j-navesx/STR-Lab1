@@ -1264,6 +1264,12 @@ void takeStock(void* pvParameters) {
 
 void takeExpired(void* pvParameters) {
 	cmd_param* takeExpired_params = (cmd_param*)pvParameters;
+
+	emergency_param* emergencyStop_params = takeExpired_params->emergencyStop_params;
+	LeftLed* LeftLed_params = emergencyStop_params->LeftLed_param;
+	xQueueHandle mbx_LeftLed = LeftLed_params->mbx_LeftLed;
+
+	int deativate = 0;
 	Coords aux;
 	StorageRequest nullItem = { NULL };
 	while (1) {
@@ -1292,6 +1298,7 @@ void takeExpired(void* pvParameters) {
 					}
 				}
 			}
+			xQueueSend(mbx_LeftLed, &deativate, 0);
 		}
 	}
 }
