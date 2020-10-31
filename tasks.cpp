@@ -194,14 +194,19 @@ void idleStore(void * pvParameters) {
 					}
 				}
 			}
+			i = 0;
+			k = 0;
 			if (uxSemaphoreGetCount(idle_params->sem_cmd) == 1) {
 				time_t now = time(0);
 				tm* ltm = localtime(&now);
 				int sec = ltm->tm_sec;
 				int min = ltm->tm_min;
-				while (ltm->tm_min - min != 1 && ltm->tm_sec - sec == 0) {
+				while (1) {
 					time_t now = time(0);
 					tm* ltm = localtime(&now);
+					if (ltm->tm_min - min != 0 && ltm->tm_sec - sec == 0) {
+						break;
+					}
 					taskYIELD();
 				}
 			}
@@ -318,12 +323,14 @@ void timePass(void* pvParameters) {
 	xQueueHandle mbx_LeftLed = LeftLed_params->mbx_LeftLed;
 	
 	int activate = 1;
+	time_t now = time(0);
+	tm* ltm = localtime(&now);
+	int min = ltm->tm_min;
+	int sec = ltm->tm_sec;
 	while (true) {
 		time_t now = time(0);
 		tm* ltm = localtime(&now);
-		int min = ltm->tm_min;
-		int sec = ltm->tm_sec;
-		if (ltm->tm_min - min != 1 && ltm->tm_sec - sec == 0) {
+		if (ltm->tm_min - min != 0 && ltm->tm_sec - sec == 0) {
 			min = ltm->tm_min;
 			for (int c = 0; c < 3; c++) {
 				for (int l = 0; l < 3; l++) {
